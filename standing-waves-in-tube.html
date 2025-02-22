@@ -20,13 +20,15 @@
       align-items: center;
       margin-bottom: 1em;
     }
-    .radio-group, .slider-group {
+    .radio-group, .slider-group, .wave-type-group {
       background: #fff;
       padding: 1em;
       border: 1px solid #ccc;
       border-radius: 6px;
     }
-    .radio-group label, .slider-group label {
+    .radio-group label,
+    .slider-group label,
+    .wave-type-group label {
       margin-right: 10px;
     }
     .slider-group input[type="range"] {
@@ -59,10 +61,22 @@
     </label>
   </div>
 
-  <!-- Slider for harmonic number n -->
+  <!-- Radio Buttons: Pressure vs. Displacement -->
+  <div class="wave-type-group">
+    <label>
+      <input type="radio" name="waveType" value="pressure" checked />
+      Pressure
+    </label>
+    <label>
+      <input type="radio" name="waveType" value="displacement" />
+      Displacement
+    </label>
+  </div>
+
+  <!-- Slider for harmonic index -->
   <div class="slider-group">
     <label for="harmonicSlider">Harmonic (n):</label>
-    <input type="range" id="harmonicSlider" min="1" max="6" step="1" value="1"/>
+    <input type="range" id="harmonicSlider" min="0" max="5" step="1" value="0"/>
     <span id="harmonicValue">1</span>
   </div>
 </div>
@@ -71,13 +85,13 @@
 
 <script>
   /****************************************************
-   * PARAMETERS & DOM REFERENCES
+   * 1. GLOBAL PARAMETERS & DOM REFERENCES
    ****************************************************/
 
-  // Tube length (arbitrary units)
+  // Tube length in abstract units
   const L = 1.0;
 
-  // Number of intermediate "phase" curves to draw inside the envelope
+  // For drawing multiple "phase" lines inside the envelope
   const NUM_PHASE_LINES = 6;
 
   // Canvas & Context
@@ -86,141 +100,222 @@
   const width = canvas.width;
   const height = canvas.height;
 
-  // Radio buttons & slider
+  // UI Elements
   const tubeTypeRadios = document.getElementsByName('tubeType');
+  const waveTypeRadios = document.getElementsByName('waveType');
   const harmonicSlider = document.getElementById('harmonicSlider');
   const harmonicValue = document.getElementById('harmonicValue');
 
-  // Track current state
-  let tubeType = 'open'; // 'open' or 'closed'
-  let n = 1;            // harmonic index
+  // We'll store possible harmonic sets:
+  //   Open tube: n = 1, 2, 3, 4, 5, ...
+  //   Closed tube: n = 1, 3, 5, 7, 9, ...
+  // For demonstration, let's keep them short.
+  const openTubeHarmonics = [1, 2, 3, 4, 5, 6];
+  const closedTubeHarmonics = [1, 3, 5, 7, 9, 11];
 
+  // Track current state
+  let tubeType = 'open';          // 'open' or 'closed'
+  let waveType = 'pressure';      // 'pressure' or 'displacement'
+  let harmonicIndex = 0;          // index in the array, not the actual "n"
+                                  // (e.g., 0 -> n=1, 1 -> n=2, ...)
 
   /****************************************************
-   * EVENT LISTENERS
+   * 2. EVENT LISTENERS & UI UPDATES
    ****************************************************/
-  // Tube type change
+
+  // 2a. Tube type change
   tubeTypeRadios.forEach(radio => {
     radio.addEventListener('change', (event) => {
       tubeType = event.target.value;
-      // Reset n to 1 whenever tube type changes
-      n = 1;
-      harmonicSlider.value = 1;
-      harmonicValue.textContent = 1;
-      // Update slider range or disabled notches if desired
-      updateSliderNotches();
+      // Reset to first harmonic in that tube type
+      harmonicIndex = 0;
+      harmonicSlider.value = 0;
+      updateHarmonicDisplay();
+      updateSliderRange();
       drawWave();
     });
   });
 
-  // Harmonic slider change
+  // 2b. Wave type change
+  waveTypeRadios.forEach(radio => {
+    radio.addEventListener('change', (event) => {
+      waveType = event.target.value;
+      drawWave();
+    });
+  });
+
+  // 2c. Harmonic slider change
   harmonicSlider.addEventListener('input', () => {
-    n = parseInt(harmonicSlider.value, 10);
-    harmonicValue.textContent = n;
+    harmonicIndex = parseInt(harmonicSlider.value, 10);
+    updateHarmonicDisplay();
     drawWave();
   });
 
-  // Function to enable/disable even values if "closed" is selected
-  function updateSliderNotches() {
-    if (tubeType === 'closed') {
-      // e.g., you might skip even numbers, but for simplicity we just set max=7
-      // and trust the user picks odd. Alternatively, you can dynamically skip them
-      // or show them as disabled in a custom UI. For a quick approach:
-      harmonicSlider.max = 7; // if you want up to n=7
+  // Updates the range of the slider based on tube type
+  function updateSliderRange() {
+    if (tubeType === 'open') {
+      harmonicSlider.max = openTubeHarmonics.length - 1;
     } else {
-      // both ends open
-      harmonicSlider.max = 6; // for example, up to n=6
+      harmonicSlider.max = closedTubeHarmonics.length - 1;
     }
   }
 
+  // Display the actual harmonic number (e.g., 1,3,5,...)
+  function updateHarmonicDisplay() {
+    const n = getCurrentHarmonicNumber();
+    harmonicValue.textContent = n.toString();
+  }
+
+  // Returns the actual harmonic number from the array
+  function getCurrentHarmonicNumber() {
+    if (tubeType === 'open') {
+      return openTubeHarmonics[harmonicIndex];
+    } else {
+      return closedTubeHarmonics[harmonicIndex];
+    }
+  }
 
   /****************************************************
-   * WAVE EQUATIONS
+   * 3. WAVE EQUATIONS
    ****************************************************/
-  /**
-   * Pressure wave shape for both ends open:
-   *   P(x) = sin(n * pi * x / L)
-   */
-  function pressureOpen(x, n) {
+
+  // 3a. Pressure, Both Ends Open:
+  //     Node at x=0 and x=L => sin(n π x / L)
+  function waveOpenPressure(x, n) {
     return Math.sin((n * Math.PI * x) / L);
   }
 
-  /**
-   * Pressure wave shape for one end closed:
-   *   P(x) = sin((2n - 1) * pi * x / (2L)) 
-   *   (here n = 1,2,3 => physically 1,3,5,...)
-   */
-  function pressureClosed(x, n) {
-    // If the slider says n=2, physically that means the 3rd harmonic, etc.
-    // But simpler: just use (2n-1) as the factor. So n=1 => 1, n=2 => 3, etc.
-    const m = 2 * n - 1;  // odd integer
-    return Math.sin((m * Math.PI * x) / (2 * L));
+  // 3b. Pressure, One End Closed:
+  //     Node at x=0 (open end), antinode at x=L (closed end)
+  //     => sin((2m - 1) π x / (2L)) but we store n=1,3,5 => n itself is odd
+  //     We'll just interpret the array as the actual factor: n π x / (2L)
+  function waveClosedPressure(x, oddN) {
+    // oddN is 1,3,5,... so formula is sin( oddN * π x / (2L) )
+    return Math.sin((oddN * Math.PI * x) / (2 * L));
   }
 
+  // 3c. Displacement, Both Ends Open:
+  //     Antinode at x=0 and x=L => cos(n π x / L)
+  //     (or equivalently sin(n π x / L + π/2), but cos is simpler)
+  function waveOpenDisplacement(x, n) {
+    return Math.cos((n * Math.PI * x) / L);
+  }
+
+  // 3d. Displacement, One End Closed:
+  //     Open end at x=0 => displacement antinode,
+  //     Closed end at x=L => displacement node
+  //     => cos( oddN * π x / (2L) )
+  function waveClosedDisplacement(x, oddN) {
+    return Math.cos((oddN * Math.PI * x) / (2 * L));
+  }
+
+  // Chooses the correct wave function based on tubeType & waveType
+  function waveFn(x) {
+    const nVal = getCurrentHarmonicNumber();
+    if (tubeType === 'open') {
+      if (waveType === 'pressure') {
+        return waveOpenPressure(x, nVal);
+      } else {
+        return waveOpenDisplacement(x, nVal);
+      }
+    } else {
+      // tubeType === 'closed'
+      if (waveType === 'pressure') {
+        return waveClosedPressure(x, nVal);
+      } else {
+        return waveClosedDisplacement(x, nVal);
+      }
+    }
+  }
 
   /****************************************************
-   * DRAWING THE STANDING WAVE
+   * 4. DRAWING THE WAVE + TUBE
    ****************************************************/
+
   function drawWave() {
-    // Clear the canvas
     ctx.clearRect(0, 0, width, height);
 
-    // Draw baseline
-    const midY = height / 2;
-    ctx.strokeStyle = '#666';
-    ctx.lineWidth = 1;
+    // 4a. Draw the tube "walls"
+    drawTubeWalls();
+
+    // 4b. Draw the black envelope
+    drawEnvelope();
+
+    // 4c. Draw multiple phase lines (lighter curves inside)
+    drawPhaseLines();
+  }
+
+  // Draw thick horizontal lines (top and bottom).
+  // If "closed," also draw a vertical line at x=0 (assuming left end is closed).
+  function drawTubeWalls() {
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'gray';
+
+    // Horizontal line at top
     ctx.beginPath();
-    ctx.moveTo(0, midY);
-    ctx.lineTo(width, midY);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(width, 0);
     ctx.stroke();
 
-    // Decide which wave function to use
-    const waveFn = (tubeType === 'open') ? pressureOpen : pressureClosed;
+    // Horizontal line at bottom
+    ctx.beginPath();
+    ctx.moveTo(0, height);
+    ctx.lineTo(width, height);
+    ctx.stroke();
 
-    // 1) Draw the black envelope
-    //    Envelope is basically ±|waveFn(x)| max over time, but for a standing wave
-    //    you can treat the amplitude as "sin(...)". We'll draw the top half
-    //    and the bottom half. We map x in [0, L] to [0, width].
+    // If tube is "one end closed," draw a vertical line at x=0
+    // (You could also interpret it as the right end closed, but let's do left.)
+    if (tubeType === 'closed') {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, height);
+      ctx.stroke();
+    }
+  }
+
+  // Draw envelope (maximum amplitude shape) in black
+  function drawEnvelope() {
+    const midY = height / 2;
+
+    // Top half of envelope
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#000';
     ctx.beginPath();
     for (let px = 0; px <= width; px++) {
       const xPhysical = (px / width) * L;
-      // amplitude at this position is |sin(...)|, but let's keep it as "max amplitude = 1"
-      // for a typical standing wave diagram
-      const val = Math.abs(waveFn(xPhysical, n));
-      const y = midY - val * (height / 2) * 0.9; // 0.9 to leave a margin
+      const val = Math.abs(waveFn(xPhysical));
+      const y = midY - val * (height / 2) * 0.9; // 0.9 for margin
       if (px === 0) {
         ctx.moveTo(px, y);
       } else {
         ctx.lineTo(px, y);
       }
     }
+    // Bottom half of envelope
     for (let px = width; px >= 0; px--) {
       const xPhysical = (px / width) * L;
-      const val = Math.abs(waveFn(xPhysical, n));
+      const val = Math.abs(waveFn(xPhysical));
       const y = midY + val * (height / 2) * 0.9;
       ctx.lineTo(px, y);
     }
     ctx.closePath();
     ctx.stroke();
+  }
 
-    // 2) Draw multiple “phase” curves inside the envelope (lighter color)
-    //    We can simulate different time snapshots with a phase offset in time
-    //    e.g., wave = sin(kx) * cos(omega t) => just pick different cos(omega t) factors
-    ctx.strokeStyle = 'rgba(0, 128, 255, 0.2)'; // a soft blue
+  // Draw multiple snapshots (phase lines) inside the envelope
+  function drawPhaseLines() {
+    const midY = height / 2;
     ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(0, 128, 255, 0.2)'; // light blue
 
     for (let phaseIndex = 0; phaseIndex < NUM_PHASE_LINES; phaseIndex++) {
-      // time factor goes from 0 to 2π
       const timeFactor = (2 * Math.PI * phaseIndex) / NUM_PHASE_LINES;
       ctx.beginPath();
       for (let px = 0; px <= width; px++) {
         const xPhysical = (px / width) * L;
-        // A standing wave can be written as: P(x, t) = sin(kx)*cos(ωt).
-        // We'll approximate that by waveFn(x) * cos(timeFactor).
-        // But waveFn() above is already sin(kx), so multiply by cos(timeFactor).
-        const val = waveFn(xPhysical, n) * Math.cos(timeFactor);
+        // Standing wave ~ waveFn(x) * cos(ω t).
+        // We'll approximate cos(ω t) by cos(timeFactor).
+        const val = waveFn(xPhysical) * Math.cos(timeFactor);
         const y = midY - val * (height / 2) * 0.9;
         if (px === 0) {
           ctx.moveTo(px, y);
@@ -232,13 +327,12 @@
     }
   }
 
-
   /****************************************************
-   * INIT
+   * 5. INITIALIZATION
    ****************************************************/
-  // Set up initial UI state
-  updateSliderNotches();
-  harmonicValue.textContent = n.toString();
+  // Set initial slider range & label
+  updateSliderRange();
+  updateHarmonicDisplay();
 
   // Initial draw
   drawWave();
