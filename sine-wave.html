@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sine Wave Simulation</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    .controls {
+      margin-bottom: 20px;
+    }
+    .control-group {
+      margin: 10px 0;
+    }
+    label {
+      margin-right: 10px;
+    }
+    canvas {
+      border: 1px solid #ccc;
+      display: block;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sine Wave Simulation</h1>
+  <div class="controls">
+    <div class="control-group">
+      <label for="amplitude">Amplitude:</label>
+      <input type="range" id="amplitude" min="0.1" max="5" step="0.1" value="1">
+      <span id="ampDisplay">1</span>
+    </div>
+    <div class="control-group">
+      <label for="phase">Phase (°):</label>
+      <input type="range" id="phase" min="0" max="360" step="1" value="0">
+      <span id="phaseDisplay">0</span>
+    </div>
+    <div class="control-group">
+      <label for="period">Period (ms):</label>
+      <input type="range" id="period" min="1" max="10" step="0.1" value="1">
+      <span id="periodDisplay">1</span>
+    </div>
+    <div class="control-group">
+      <span>Period in seconds: <span id="periodSec">0.001</span> s</span> |
+      <span>Frequency: <span id="frequency">1000</span> Hz</span>
+    </div>
+  </div>
+  <canvas id="sineCanvas" width="800" height="300"></canvas>
+
+  <script>
+    // Get references to elements
+    const amplitudeSlider = document.getElementById('amplitude');
+    const phaseSlider = document.getElementById('phase');
+    const periodSlider = document.getElementById('period');
+    const ampDisplay = document.getElementById('ampDisplay');
+    const phaseDisplay = document.getElementById('phaseDisplay');
+    const periodDisplay = document.getElementById('periodDisplay');
+    const periodSecDisplay = document.getElementById('periodSec');
+    const frequencyDisplay = document.getElementById('frequency');
+    const canvas = document.getElementById('sineCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Default parameters
+    let amplitude = parseFloat(amplitudeSlider.value);
+    let phase = parseFloat(phaseSlider.value) * Math.PI / 180; // convert to radians
+    let period_ms = parseFloat(periodSlider.value);
+    let period_sec = period_ms / 1000;
+    let frequency = 1 / period_sec;
+
+    // Update display function
+    function updateDisplays() {
+      ampDisplay.textContent = amplitude;
+      phaseDisplay.textContent = phaseSlider.value;
+      periodDisplay.textContent = period_ms;
+      periodSecDisplay.textContent = period_sec.toFixed(3);
+      frequencyDisplay.textContent = Math.round(frequency);
+    }
+
+    // Draw the sine wave on the canvas
+    function drawSine() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.beginPath();
+      const width = canvas.width;
+      const height = canvas.height;
+      const midY = height / 2;
+      const samples = width; // one sample per pixel for smoothness
+
+      for (let x = 0; x < samples; x++) {
+        // Calculate time for this x coordinate.
+        // For simplicity, assume the total time displayed equals one period * some factor.
+        // Adjust the factor to show a few periods (say 4 periods)
+        const time = (x / samples) * period_sec * 4;
+        const y = amplitude * Math.sin(2 * Math.PI * frequency * time + phase);
+        // Scale the sine output to canvas height (flip the sign because canvas y increases downward)
+        const canvasY = midY - y * (height / 4); // scale factor for visualization
+        if (x === 0) {
+          ctx.moveTo(x, canvasY);
+        } else {
+          ctx.lineTo(x, canvasY);
+        }
+      }
+      ctx.strokeStyle = '#0077cc';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Update parameters and redraw when sliders change
+    function updateParameters() {
+      amplitude = parseFloat(amplitudeSlider.value);
+      phase = parseFloat(phaseSlider.value) * Math.PI / 180; // convert degrees to radians
+      period_ms = parseFloat(periodSlider.value);
+      period_sec = period_ms / 1000;
+      frequency = 1 / period_sec;
+
+      updateDisplays();
+      drawSine();
+    }
+
+    // Add event listeners
+    amplitudeSlider.addEventListener('input', updateParameters);
+    phaseSlider.addEventListener('input', updateParameters);
+    periodSlider.addEventListener('input', updateParameters);
+
+    // Initial update and draw
+    updateParameters();
+  </script>
+</body>
+</html>
