@@ -92,19 +92,14 @@
   /****************************************************
    * 1. GLOBAL PARAMETERS & DOM REFERENCES
    ****************************************************/
-
   // Tube length in abstract units
   const L = 1.0;
 
-  // Horizontal & vertical margins inside the canvas
+  // Margins inside the canvas for drawing the tube
   const marginLeft = 70;
   const marginRight = 70;
   const marginTop = 30;
   const marginBottom = 30;
-
-  // For drawing multiple "phase" lines (the black envelope & internal lines)
-  const NUM_PHASE_LINES = 0;  // If you want interior "phase snapshots," set > 0
-  // We'll rely mainly on the black envelope + the animated wave in blue.
 
   // Canvas & Context
   const canvas = document.getElementById('waveCanvas');
@@ -112,7 +107,7 @@
   const width = canvas.width;
   const height = canvas.height;
 
-  // Computed drawing region for the wave
+  // Drawing region for the wave
   const tubeWidth = width - marginLeft - marginRight;
   const tubeHeight = height - marginTop - marginBottom;
   const midY = marginTop + tubeHeight / 2;
@@ -124,16 +119,14 @@
   const harmonicValue = document.getElementById('harmonicValue');
   const toggleAnimBtn = document.getElementById('toggleAnimBtn');
 
-  // Two sets of harmonics:
-  //   Open tube: [1, 2, 3, 4, 5, 6, ...]
-  //   Closed tube: [1, 3, 5, 7, 9, 11, ...]
+  // Harmonics arrays:
   const openTubeHarmonics = [1, 2, 3, 4, 5, 6];
   const closedTubeHarmonics = [1, 3, 5, 7, 9, 11];
 
-  // Track current state
+  // State variables
   let tubeType = 'open';         // 'open' or 'closed'
   let waveType = 'pressure';     // 'pressure' or 'displacement'
-  let harmonicIndex = 0;         // index in the array
+  let harmonicIndex = 0;         // index in the harmonic array
   let isAnimating = false;       // animation state
   let time = 0;                  // time variable for animation
   const dt = 0.04;               // time step per frame
@@ -142,42 +135,37 @@
   /****************************************************
    * 2. EVENT LISTENERS & UI UPDATES
    ****************************************************/
-
-  // 2a. Tube type change
+  // Tube type change
   tubeTypeRadios.forEach(radio => {
     radio.addEventListener('change', (event) => {
       tubeType = event.target.value;
-      // Reset to first harmonic in that tube type
       harmonicIndex = 0;
       harmonicSlider.value = 0;
       updateHarmonicDisplay();
       updateSliderRange();
-      // Stop animation if it's running
       stopAnimation();
       drawAll();
     });
   });
 
-  // 2b. Wave type change
+  // Wave type change
   waveTypeRadios.forEach(radio => {
     radio.addEventListener('change', (event) => {
       waveType = event.target.value;
-      // Stop animation if it's running
       stopAnimation();
       drawAll();
     });
   });
 
-  // 2c. Harmonic slider change
+  // Harmonic slider change
   harmonicSlider.addEventListener('input', () => {
     harmonicIndex = parseInt(harmonicSlider.value, 10);
     updateHarmonicDisplay();
-    // Stop animation if it's running
     stopAnimation();
     drawAll();
   });
 
-  // 2d. Play/Pause button
+  // Play/Pause button
   toggleAnimBtn.addEventListener('click', () => {
     if (isAnimating) {
       stopAnimation();
@@ -186,7 +174,7 @@
     }
   });
 
-  // 2e. Update slider range based on tube type
+  // Update slider range based on tube type
   function updateSliderRange() {
     if (tubeType === 'open') {
       harmonicSlider.max = openTubeHarmonics.length - 1;
@@ -195,13 +183,13 @@
     }
   }
 
-  // 2f. Display the actual harmonic number
+  // Display the actual harmonic number
   function updateHarmonicDisplay() {
     const n = getCurrentHarmonicNumber();
     harmonicValue.textContent = n.toString();
   }
 
-  // Returns the actual harmonic number from the array
+  // Return the current harmonic number
   function getCurrentHarmonicNumber() {
     if (tubeType === 'open') {
       return openTubeHarmonics[harmonicIndex];
@@ -213,28 +201,27 @@
   /****************************************************
    * 3. WAVE EQUATIONS
    ****************************************************/
-
-  // Pressure, both ends open: sin(n * π * x / L)
+  // Pressure, both ends open: sin(nπx/L)
   function waveOpenPressure(x, n) {
     return Math.sin((n * Math.PI * x) / L);
   }
 
-  // Pressure, one end closed: sin(oddN * π * x / (2L)), oddN = 1,3,5...
+  // Pressure, one end closed: sin(oddNπx/(2L))
   function waveClosedPressure(x, oddN) {
     return Math.sin((oddN * Math.PI * x) / (2 * L));
   }
 
-  // Displacement, both ends open: cos(n * π * x / L)
+  // Displacement, both ends open: cos(nπx/L)
   function waveOpenDisplacement(x, n) {
     return Math.cos((n * Math.PI * x) / L);
   }
 
-  // Displacement, one end closed: cos(oddN * π * x / (2L))
+  // Displacement, one end closed: cos(oddNπx/(2L))
   function waveClosedDisplacement(x, oddN) {
     return Math.cos((oddN * Math.PI * x) / (2 * L));
   }
 
-  // Choose the correct wave function for the shape (no time factor)
+  // Choose the correct wave function (without time factor)
   function waveShape(xPhysical) {
     const nVal = getCurrentHarmonicNumber();
     if (tubeType === 'open') {
@@ -244,7 +231,6 @@
         return waveOpenDisplacement(xPhysical, nVal);
       }
     } else {
-      // tubeType === 'closed'
       if (waveType === 'pressure') {
         return waveClosedPressure(xPhysical, nVal);
       } else {
@@ -261,34 +247,33 @@
   /****************************************************
    * 4. DRAWING FUNCTIONS
    ****************************************************/
-
   // Master draw function
   function drawAll() {
     ctx.clearRect(0, 0, width, height);
     drawTubeWalls();
-    drawEnvelope();        // black envelope for max amplitude
-    drawAnimatedWave(0);   // if not animating, just show time=0 snapshot
+    drawEnvelope();
+    drawAnimatedWave(0); // static snapshot at t=0 if not animating
   }
 
-  // Draw the thick horizontal lines (top & bottom) to represent the tube.
-  // If one end is closed, draw a thick vertical line at the left margin.
+  // Draw tube walls: thick horizontal lines inside margins.
+  // For a closed tube, also draw a vertical line at the left margin.
   function drawTubeWalls() {
     ctx.lineWidth = 8;
     ctx.strokeStyle = 'gray';
 
-    // Horizontal top
+    // Top wall
     ctx.beginPath();
     ctx.moveTo(marginLeft, marginTop);
     ctx.lineTo(width - marginRight, marginTop);
     ctx.stroke();
 
-    // Horizontal bottom
+    // Bottom wall
     ctx.beginPath();
     ctx.moveTo(marginLeft, height - marginBottom);
     ctx.lineTo(width - marginRight, height - marginBottom);
     ctx.stroke();
 
-    // If closed, draw vertical line at left margin
+    // For one-end closed, draw vertical wall at left margin
     if (tubeType === 'closed') {
       ctx.beginPath();
       ctx.moveTo(marginLeft, marginTop);
@@ -297,61 +282,69 @@
     }
   }
 
-  // Draw black envelope (maximum amplitude)
+  // Draw the envelope showing maximum amplitude.
+  // For an open tube, draw top and bottom halves separately to avoid a vertical line.
   function drawEnvelope() {
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#000';
 
-    // Top half of envelope
-    ctx.beginPath();
-    for (let px = 0; px <= tubeWidth; px++) {
-      const xPhysical = (px / tubeWidth) * L; // map canvas px -> [0, L]
-      const val = Math.abs(waveShape(xPhysical));
-      const y = midY - val * (tubeHeight / 2) * 0.9;
-      const cx = marginLeft + px; // shift by marginLeft
-      if (px === 0) {
-        ctx.moveTo(cx, y);
-      } else {
+    if (tubeType === 'closed') {
+      // Draw a single closed path.
+      ctx.beginPath();
+      for (let px = 0; px <= tubeWidth; px++) {
+        const xPhysical = (px / tubeWidth) * L;
+        const val = Math.abs(waveShape(xPhysical));
+        const y = midY - val * (tubeHeight / 2) * 0.9;
+        const cx = marginLeft + px;
+        if (px === 0) {
+          ctx.moveTo(cx, y);
+        } else {
+          ctx.lineTo(cx, y);
+        }
+      }
+      for (let px = tubeWidth; px >= 0; px--) {
+        const xPhysical = (px / tubeWidth) * L;
+        const val = Math.abs(waveShape(xPhysical));
+        const y = midY + val * (tubeHeight / 2) * 0.9;
+        const cx = marginLeft + px;
         ctx.lineTo(cx, y);
       }
-    }
-    // Bottom half of envelope
-    for (let px = tubeWidth; px >= 0; px--) {
-      const xPhysical = (px / tubeWidth) * L;
-      const val = Math.abs(waveShape(xPhysical));
-      const y = midY + val * (tubeHeight / 2) * 0.9;
-      const cx = marginLeft + px;
-      ctx.lineTo(cx, y);
-    }
-    ctx.closePath();
-    ctx.stroke();
-
-    // Optionally, draw phase lines inside the envelope (if NUM_PHASE_LINES>0)
-    if (NUM_PHASE_LINES > 0) {
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
-      for (let i = 1; i < NUM_PHASE_LINES; i++) {
-        const phaseFrac = i / NUM_PHASE_LINES;
-        drawSnapshotInside(phaseFrac * 2 * Math.PI);
+      ctx.closePath();
+      ctx.stroke();
+    } else {
+      // For open tube: draw top and bottom halves separately.
+      // Top half:
+      ctx.beginPath();
+      for (let px = 0; px <= tubeWidth; px++) {
+        const xPhysical = (px / tubeWidth) * L;
+        const val = Math.abs(waveShape(xPhysical));
+        const y = midY - val * (tubeHeight / 2) * 0.9;
+        const cx = marginLeft + px;
+        if (px === 0) {
+          ctx.moveTo(cx, y);
+        } else {
+          ctx.lineTo(cx, y);
+        }
       }
+      ctx.stroke();
+      // Bottom half:
+      ctx.beginPath();
+      for (let px = tubeWidth; px >= 0; px--) {
+        const xPhysical = (px / tubeWidth) * L;
+        const val = Math.abs(waveShape(xPhysical));
+        const y = midY + val * (tubeHeight / 2) * 0.9;
+        const cx = marginLeft + px;
+        if (px === tubeWidth) {
+          ctx.moveTo(cx, y);
+        } else {
+          ctx.lineTo(cx, y);
+        }
+      }
+      ctx.stroke();
     }
   }
 
-  // Draw one “snapshot” inside the envelope, with a time phase
-  function drawSnapshotInside(phase) {
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (let px = 0; px <= tubeWidth; px++) {
-      const xPhysical = (px / tubeWidth) * L;
-      const val = waveShape(xPhysical) * Math.cos(phase);
-      const y = midY - val * (tubeHeight / 2) * 0.9;
-      const cx = marginLeft + px;
-      if (px === 0) ctx.moveTo(cx, y);
-      else ctx.lineTo(cx, y);
-    }
-    ctx.stroke();
-  }
-
-  // Draw the wave at a given time in BLUE
+  // Draw the animated wave in blue at a given time t.
   function drawAnimatedWave(tVal) {
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'blue';
@@ -361,8 +354,11 @@
       const val = waveTime(xPhysical, tVal);
       const y = midY - val * (tubeHeight / 2) * 0.9;
       const cx = marginLeft + px;
-      if (px === 0) ctx.moveTo(cx, y);
-      else ctx.lineTo(cx, y);
+      if (px === 0) {
+        ctx.moveTo(cx, y);
+      } else {
+        ctx.lineTo(cx, y);
+      }
     }
     ctx.stroke();
   }
@@ -383,14 +379,11 @@
 
   function animateFrame() {
     if (!isAnimating) return;
-
     time += dt;
-    // Redraw everything each frame
     ctx.clearRect(0, 0, width, height);
     drawTubeWalls();
     drawEnvelope();
     drawAnimatedWave(time);
-
     requestAnimationFrame(animateFrame);
   }
 
@@ -399,7 +392,7 @@
    ****************************************************/
   updateSliderRange();
   updateHarmonicDisplay();
-  drawAll(); // initial static draw
+  drawAll();
 </script>
 
 </body>
