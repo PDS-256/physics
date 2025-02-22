@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dual Sine Wave Simulation</title>
+  <title>Dual Sine Waves with Lissajous Figure</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -33,7 +33,7 @@
     canvas {
       border: 1px solid #ccc;
       display: block;
-      margin-top: 20px;
+      margin: 20px 0;
     }
     .display-group {
       font-size: 0.9em;
@@ -42,7 +42,7 @@
   </style>
 </head>
 <body>
-  <h1>Dual Sine Wave Simulation</h1>
+  <h1>Dual Sine Waves with Lissajous Figure</h1>
   <div class="controls-container">
     <!-- Wave 1 Controls -->
     <div class="control-column" id="wave1-controls">
@@ -59,12 +59,12 @@
       </div>
       <div class="control-group">
         <label for="period1">Period (ms):</label>
-        <input type="range" id="period1" min="1" max="10" step="0.1" value="1">
-        <span id="periodDisplay1">1</span>
+        <input type="range" id="period1" min="1" max="10" step="0.1" value="5">
+        <span id="periodDisplay1">5</span>
       </div>
       <div class="display-group">
-        <div>Period in sec: <span id="periodSec1">0.001</span> s</div>
-        <div>Frequency: <span id="frequency1">1000</span> Hz</div>
+        <div>Period in sec: <span id="periodSec1">0.005</span> s</div>
+        <div>Frequency: <span id="frequency1">200</span> Hz</div>
       </div>
     </div>
     
@@ -83,21 +83,24 @@
       </div>
       <div class="control-group">
         <label for="period2">Period (ms):</label>
-        <input type="range" id="period2" min="1" max="10" step="0.1" value="1">
-        <span id="periodDisplay2">1</span>
+        <input type="range" id="period2" min="1" max="10" step="0.1" value="5">
+        <span id="periodDisplay2">5</span>
       </div>
       <div class="display-group">
-        <div>Period in sec: <span id="periodSec2">0.001</span> s</div>
-        <div>Frequency: <span id="frequency2">1000</span> Hz</div>
+        <div>Period in sec: <span id="periodSec2">0.005</span> s</div>
+        <div>Frequency: <span id="frequency2">200</span> Hz</div>
       </div>
     </div>
   </div>
 
+  <!-- Canvas for Time Series Plot -->
   <canvas id="sineCanvas" width="800" height="300"></canvas>
+  <!-- Canvas for Lissajous Figure -->
+  <canvas id="lissajousCanvas" width="400" height="400"></canvas>
 
   <script>
-    // Fixed horizontal range: 20 ms = 0.02 s
-    const totalTimeSec = 0.02;
+    // Fixed horizontal range for the time series plot: 10 ms = 0.01 s
+    const totalTimeSec = 0.01;
     
     // Get elements for Wave 1
     const amplitude1Slider = document.getElementById('amplitude1');
@@ -119,11 +122,13 @@
     const periodSecDisplay2 = document.getElementById('periodSec2');
     const frequencyDisplay2 = document.getElementById('frequency2');
 
-    // Get canvas and context
-    const canvas = document.getElementById('sineCanvas');
-    const ctx = canvas.getContext('2d');
+    // Get canvas and contexts
+    const sineCanvas = document.getElementById('sineCanvas');
+    const sineCtx = sineCanvas.getContext('2d');
+    const lissajousCanvas = document.getElementById('lissajousCanvas');
+    const lissajousCtx = lissajousCanvas.getContext('2d');
 
-    // Initialize parameters for both waves
+    // Initialize parameters for both waves (default period = 5 ms)
     let amplitude1 = parseFloat(amplitude1Slider.value);
     let phase1 = parseFloat(phase1Slider.value) * Math.PI / 180;
     let period_ms1 = parseFloat(period1Slider.value);
@@ -144,7 +149,6 @@
       periodDisplay1.textContent = period_ms1;
       periodSecDisplay1.textContent = period_sec1.toFixed(3);
       frequencyDisplay1.textContent = Math.round(frequency1);
-
       // Wave 2 displays
       ampDisplay2.textContent = amplitude2;
       phaseDisplay2.textContent = phase2Slider.value;
@@ -153,102 +157,137 @@
       frequencyDisplay2.textContent = Math.round(frequency2);
     }
 
-    // Draw grid with vertical lines every 2 ms and time labels in ms
-    function drawGrid() {
-      const width = canvas.width;
-      const height = canvas.height;
-      
+    // Draw grid with vertical lines every 2 ms and time labels (for the time series plot)
+    function drawGrid(ctx, canvasWidth, canvasHeight) {
       ctx.strokeStyle = "#e0e0e0";
       ctx.lineWidth = 1;
       const gridIntervalSec = 0.002; // 2 ms
-      
       for (let t = 0; t <= totalTimeSec; t += gridIntervalSec) {
-        const x = (t / totalTimeSec) * width;
+        const x = (t / totalTimeSec) * canvasWidth;
         ctx.beginPath();
         ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
+        ctx.lineTo(x, canvasHeight);
         ctx.stroke();
-        
         // Label the grid at the bottom (in ms)
         ctx.fillStyle = "#000";
         ctx.font = "10px Arial";
         const label = Math.round(t * 1000);
-        ctx.fillText(label + " ms", x + 2, height - 5);
+        ctx.fillText(label + " ms", x + 2, canvasHeight - 5);
       }
-      
-      // Horizontal midline
+      // Draw horizontal midline
       ctx.beginPath();
-      ctx.strokeStyle = "#e0e0e0";
-      ctx.moveTo(0, height / 2);
-      ctx.lineTo(width, height / 2);
+      ctx.moveTo(0, canvasHeight / 2);
+      ctx.lineTo(canvasWidth, canvasHeight / 2);
       ctx.stroke();
     }
 
-    // Draw both sine waves and their sum
-    function drawSineWaves() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      drawGrid();
+    // Draw the time series plot: two sine waves and their sum
+    function drawTimeSeries() {
+      sineCtx.clearRect(0, 0, sineCanvas.width, sineCanvas.height);
+      drawGrid(sineCtx, sineCanvas.width, sineCanvas.height);
       
-      const width = canvas.width;
-      const height = canvas.height;
+      const width = sineCanvas.width;
+      const height = sineCanvas.height;
       const midY = height / 2;
       const samples = width; // one sample per pixel
-      
-      // Arrays to store computed y values for the two waves
+
       let wave1Points = [];
       let wave2Points = [];
-      
-      ctx.lineWidth = 2;
-      
+
       // Draw Wave 1 in blue
-      ctx.strokeStyle = "#0077cc";
-      ctx.beginPath();
+      sineCtx.strokeStyle = "#0077cc";
+      sineCtx.lineWidth = 2;
+      sineCtx.beginPath();
       for (let x = 0; x < samples; x++) {
         const time = (x / samples) * totalTimeSec;
         const y = amplitude1 * Math.sin(2 * Math.PI * frequency1 * time + phase1);
         const canvasY = midY - y * (height / 4);
         wave1Points.push(canvasY);
         if (x === 0) {
-          ctx.moveTo(x, canvasY);
+          sineCtx.moveTo(x, canvasY);
         } else {
-          ctx.lineTo(x, canvasY);
+          sineCtx.lineTo(x, canvasY);
         }
       }
-      ctx.stroke();
-      
+      sineCtx.stroke();
+
       // Draw Wave 2 in red
-      ctx.strokeStyle = "#cc0000";
-      ctx.beginPath();
+      sineCtx.strokeStyle = "#cc0000";
+      sineCtx.lineWidth = 2;
+      sineCtx.beginPath();
       for (let x = 0; x < samples; x++) {
         const time = (x / samples) * totalTimeSec;
         const y = amplitude2 * Math.sin(2 * Math.PI * frequency2 * time + phase2);
         const canvasY = midY - y * (height / 4);
         wave2Points.push(canvasY);
         if (x === 0) {
-          ctx.moveTo(x, canvasY);
+          sineCtx.moveTo(x, canvasY);
         } else {
-          ctx.lineTo(x, canvasY);
+          sineCtx.lineTo(x, canvasY);
         }
       }
-      ctx.stroke();
-      
+      sineCtx.stroke();
+
       // Draw the combined wave in black (sum of wave1 and wave2)
-      ctx.strokeStyle = "#000";
-      ctx.beginPath();
+      sineCtx.strokeStyle = "#000";
+      sineCtx.lineWidth = 2;
+      sineCtx.beginPath();
       for (let x = 0; x < samples; x++) {
         // Combine the y-values from wave 1 and wave 2
-        const combinedY = wave1Points[x] + wave2Points[x] - midY; 
-        // (subtract midY to adjust for double-counting the midline)
+        const combinedY = wave1Points[x] + wave2Points[x] - midY;
         if (x === 0) {
-          ctx.moveTo(x, combinedY);
+          sineCtx.moveTo(x, combinedY);
         } else {
-          ctx.lineTo(x, combinedY);
+          sineCtx.lineTo(x, combinedY);
         }
       }
-      ctx.stroke();
+      sineCtx.stroke();
     }
 
-    // Update parameters from both sets of sliders and redraw
+    // Draw the Lissajous figure using the two waves as x and y coordinates
+    function drawLissajous() {
+      lissajousCtx.clearRect(0, 0, lissajousCanvas.width, lissajousCanvas.height);
+      // For the Lissajous plot, we'll map both waves to the canvas
+      const width = lissajousCanvas.width;
+      const height = lissajousCanvas.height;
+      const midX = width / 2;
+      const midY = height / 2;
+      // Use a scale factor so that the waves fill the canvas
+      const scaleX = width / 4;
+      const scaleY = height / 4;
+      
+      lissajousCtx.strokeStyle = "#000";
+      lissajousCtx.lineWidth = 1;
+      lissajousCtx.beginPath();
+      
+      const samples = 400; // sample over one full cycle of the Lissajous figure
+      for (let i = 0; i <= samples; i++) {
+        // Map i to time over the total range (10 ms)
+        const t = (i / samples) * totalTimeSec;
+        // x is determined by wave 1 and y by wave 2
+        const xVal = amplitude1 * Math.sin(2 * Math.PI * frequency1 * t + phase1);
+        const yVal = amplitude2 * Math.sin(2 * Math.PI * frequency2 * t + phase2);
+        const canvasX = midX + xVal * scaleX;
+        const canvasY = midY - yVal * scaleY;
+        if (i === 0) {
+          lissajousCtx.moveTo(canvasX, canvasY);
+        } else {
+          lissajousCtx.lineTo(canvasX, canvasY);
+        }
+      }
+      lissajousCtx.stroke();
+      
+      // Optionally, draw axes
+      lissajousCtx.strokeStyle = "#e0e0e0";
+      lissajousCtx.beginPath();
+      lissajousCtx.moveTo(midX, 0);
+      lissajousCtx.lineTo(midX, height);
+      lissajousCtx.moveTo(0, midY);
+      lissajousCtx.lineTo(width, midY);
+      lissajousCtx.stroke();
+    }
+
+    // Update parameters from both sets of sliders and redraw both plots
     function updateParameters() {
       // Update Wave 1 parameters
       amplitude1 = parseFloat(amplitude1Slider.value);
@@ -265,14 +304,14 @@
       frequency2 = 1 / period_sec2;
       
       updateDisplays();
-      drawSineWaves();
+      drawTimeSeries();
+      drawLissajous();
     }
 
     // Add event listeners for both sets of sliders
     amplitude1Slider.addEventListener('input', updateParameters);
     phase1Slider.addEventListener('input', updateParameters);
     period1Slider.addEventListener('input', updateParameters);
-    
     amplitude2Slider.addEventListener('input', updateParameters);
     phase2Slider.addEventListener('input', updateParameters);
     period2Slider.addEventListener('input', updateParameters);
