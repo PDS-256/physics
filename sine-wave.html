@@ -3,14 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sine Wave Simulation with Grid</title>
+  <title>Dual Sine Wave Simulation</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       padding: 20px;
     }
-    .controls {
+    .controls-container {
+      display: flex;
+      justify-content: space-between;
       margin-bottom: 20px;
+    }
+    .control-column {
+      width: 48%;
+      border: 1px solid #ccc;
+      padding: 10px;
+      box-sizing: border-box;
+      border-radius: 4px;
+    }
+    .control-column h2 {
+      margin-top: 0;
     }
     .control-group {
       margin: 10px 0;
@@ -23,90 +35,148 @@
       display: block;
       margin-top: 20px;
     }
+    .display-group {
+      font-size: 0.9em;
+      color: #555;
+    }
   </style>
 </head>
 <body>
-  <h1>Sine Wave Simulation with Grid</h1>
-  <div class="controls">
-    <div class="control-group">
-      <label for="amplitude">Amplitude:</label>
-      <input type="range" id="amplitude" min="0.1" max="5" step="0.1" value="1">
-      <span id="ampDisplay">1</span>
+  <h1>Dual Sine Wave Simulation</h1>
+  <div class="controls-container">
+    <!-- Wave 1 Controls -->
+    <div class="control-column" id="wave1-controls">
+      <h2>Wave 1 (Blue)</h2>
+      <div class="control-group">
+        <label for="amplitude1">Amplitude:</label>
+        <input type="range" id="amplitude1" min="0.1" max="5" step="0.1" value="1">
+        <span id="ampDisplay1">1</span>
+      </div>
+      <div class="control-group">
+        <label for="phase1">Phase (°):</label>
+        <input type="range" id="phase1" min="0" max="360" step="1" value="0">
+        <span id="phaseDisplay1">0</span>
+      </div>
+      <div class="control-group">
+        <label for="period1">Period (ms):</label>
+        <input type="range" id="period1" min="1" max="10" step="0.1" value="1">
+        <span id="periodDisplay1">1</span>
+      </div>
+      <div class="display-group">
+        <div>Period in sec: <span id="periodSec1">0.001</span> s</div>
+        <div>Frequency: <span id="frequency1">1000</span> Hz</div>
+      </div>
     </div>
-    <div class="control-group">
-      <label for="phase">Phase (°):</label>
-      <input type="range" id="phase" min="0" max="360" step="1" value="0">
-      <span id="phaseDisplay">0</span>
-    </div>
-    <div class="control-group">
-      <label for="period">Period (ms):</label>
-      <input type="range" id="period" min="1" max="10" step="0.1" value="1">
-      <span id="periodDisplay">1</span>
-    </div>
-    <div class="control-group">
-      <span>Period in seconds: <span id="periodSec">0.001</span> s</span> |
-      <span>Frequency: <span id="frequency">1000</span> Hz</span>
+    
+    <!-- Wave 2 Controls -->
+    <div class="control-column" id="wave2-controls">
+      <h2>Wave 2 (Red)</h2>
+      <div class="control-group">
+        <label for="amplitude2">Amplitude:</label>
+        <input type="range" id="amplitude2" min="0.1" max="5" step="0.1" value="1">
+        <span id="ampDisplay2">1</span>
+      </div>
+      <div class="control-group">
+        <label for="phase2">Phase (°):</label>
+        <input type="range" id="phase2" min="0" max="360" step="1" value="0">
+        <span id="phaseDisplay2">0</span>
+      </div>
+      <div class="control-group">
+        <label for="period2">Period (ms):</label>
+        <input type="range" id="period2" min="1" max="10" step="0.1" value="1">
+        <span id="periodDisplay2">1</span>
+      </div>
+      <div class="display-group">
+        <div>Period in sec: <span id="periodSec2">0.001</span> s</div>
+        <div>Frequency: <span id="frequency2">1000</span> Hz</div>
+      </div>
     </div>
   </div>
+
   <canvas id="sineCanvas" width="800" height="300"></canvas>
 
   <script>
-    // Get references to elements
-    const amplitudeSlider = document.getElementById('amplitude');
-    const phaseSlider = document.getElementById('phase');
-    const periodSlider = document.getElementById('period');
-    const ampDisplay = document.getElementById('ampDisplay');
-    const phaseDisplay = document.getElementById('phaseDisplay');
-    const periodDisplay = document.getElementById('periodDisplay');
-    const periodSecDisplay = document.getElementById('periodSec');
-    const frequencyDisplay = document.getElementById('frequency');
+    // Fixed horizontal range: 20 ms = 0.02 s
+    const totalTimeSec = 0.02;
+    
+    // Get elements for Wave 1
+    const amplitude1Slider = document.getElementById('amplitude1');
+    const phase1Slider = document.getElementById('phase1');
+    const period1Slider = document.getElementById('period1');
+    const ampDisplay1 = document.getElementById('ampDisplay1');
+    const phaseDisplay1 = document.getElementById('phaseDisplay1');
+    const periodDisplay1 = document.getElementById('periodDisplay1');
+    const periodSecDisplay1 = document.getElementById('periodSec1');
+    const frequencyDisplay1 = document.getElementById('frequency1');
+
+    // Get elements for Wave 2
+    const amplitude2Slider = document.getElementById('amplitude2');
+    const phase2Slider = document.getElementById('phase2');
+    const period2Slider = document.getElementById('period2');
+    const ampDisplay2 = document.getElementById('ampDisplay2');
+    const phaseDisplay2 = document.getElementById('phaseDisplay2');
+    const periodDisplay2 = document.getElementById('periodDisplay2');
+    const periodSecDisplay2 = document.getElementById('periodSec2');
+    const frequencyDisplay2 = document.getElementById('frequency2');
+
+    // Get canvas and context
     const canvas = document.getElementById('sineCanvas');
     const ctx = canvas.getContext('2d');
 
-    // Fixed time range for the x-axis: 20 ms (0.02 s)
-    const totalTimeSec = 0.02;
+    // Initialize parameters for both waves
+    let amplitude1 = parseFloat(amplitude1Slider.value);
+    let phase1 = parseFloat(phase1Slider.value) * Math.PI / 180;
+    let period_ms1 = parseFloat(period1Slider.value);
+    let period_sec1 = period_ms1 / 1000;
+    let frequency1 = 1 / period_sec1;
 
-    // Default parameters
-    let amplitude = parseFloat(amplitudeSlider.value);
-    let phase = parseFloat(phaseSlider.value) * Math.PI / 180; // convert to radians
-    let period_ms = parseFloat(periodSlider.value);
-    let period_sec = period_ms / 1000;
-    let frequency = 1 / period_sec;
+    let amplitude2 = parseFloat(amplitude2Slider.value);
+    let phase2 = parseFloat(phase2Slider.value) * Math.PI / 180;
+    let period_ms2 = parseFloat(period2Slider.value);
+    let period_sec2 = period_ms2 / 1000;
+    let frequency2 = 1 / period_sec2;
 
-    // Update display function
+    // Update display functions for each wave
     function updateDisplays() {
-      ampDisplay.textContent = amplitude;
-      phaseDisplay.textContent = phaseSlider.value;
-      periodDisplay.textContent = period_ms;
-      periodSecDisplay.textContent = period_sec.toFixed(3);
-      frequencyDisplay.textContent = Math.round(frequency);
+      // Wave 1 displays
+      ampDisplay1.textContent = amplitude1;
+      phaseDisplay1.textContent = phase1Slider.value;
+      periodDisplay1.textContent = period_ms1;
+      periodSecDisplay1.textContent = period_sec1.toFixed(3);
+      frequencyDisplay1.textContent = Math.round(frequency1);
+
+      // Wave 2 displays
+      ampDisplay2.textContent = amplitude2;
+      phaseDisplay2.textContent = phase2Slider.value;
+      periodDisplay2.textContent = period_ms2;
+      periodSecDisplay2.textContent = period_sec2.toFixed(3);
+      frequencyDisplay2.textContent = Math.round(frequency2);
     }
 
-    // Function to draw grid lines and labels on the canvas
+    // Draw grid with vertical lines every 2 ms and time labels in ms
     function drawGrid() {
       const width = canvas.width;
       const height = canvas.height;
       
-      // Draw vertical grid lines every 2 ms (0.002 s)
       ctx.strokeStyle = "#e0e0e0";
       ctx.lineWidth = 1;
       const gridIntervalSec = 0.002; // 2 ms
+      
       for (let t = 0; t <= totalTimeSec; t += gridIntervalSec) {
         const x = (t / totalTimeSec) * width;
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, height);
         ctx.stroke();
-
+        
         // Label the grid at the bottom (in ms)
         ctx.fillStyle = "#000";
         ctx.font = "10px Arial";
-        // Convert time to ms and round appropriately
         const label = Math.round(t * 1000);
         ctx.fillText(label + " ms", x + 2, height - 5);
       }
-
-      // Draw horizontal midline for reference
+      
+      // Horizontal midline
       ctx.beginPath();
       ctx.strokeStyle = "#e0e0e0";
       ctx.moveTo(0, height / 2);
@@ -114,54 +184,99 @@
       ctx.stroke();
     }
 
-    // Draw the sine wave on the canvas along with the grid
-    function drawSine() {
+    // Draw both sine waves and their sum
+    function drawSineWaves() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Draw the grid first
       drawGrid();
       
-      ctx.beginPath();
       const width = canvas.width;
       const height = canvas.height;
       const midY = height / 2;
       const samples = width; // one sample per pixel
-
+      
+      // Arrays to store computed y values for the two waves
+      let wave1Points = [];
+      let wave2Points = [];
+      
+      ctx.lineWidth = 2;
+      
+      // Draw Wave 1 in blue
+      ctx.strokeStyle = "#0077cc";
+      ctx.beginPath();
       for (let x = 0; x < samples; x++) {
-        // Calculate time in seconds corresponding to x
         const time = (x / samples) * totalTimeSec;
-        // Calculate the y-value of the sine wave
-        const y = amplitude * Math.sin(2 * Math.PI * frequency * time + phase);
-        // Map sine value to canvas y-coordinate (flip sign for canvas coordinates)
-        const canvasY = midY - y * (height / 4); // scale factor for visualization
+        const y = amplitude1 * Math.sin(2 * Math.PI * frequency1 * time + phase1);
+        const canvasY = midY - y * (height / 4);
+        wave1Points.push(canvasY);
         if (x === 0) {
           ctx.moveTo(x, canvasY);
         } else {
           ctx.lineTo(x, canvasY);
         }
       }
-      ctx.strokeStyle = '#0077cc';
-      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // Draw Wave 2 in red
+      ctx.strokeStyle = "#cc0000";
+      ctx.beginPath();
+      for (let x = 0; x < samples; x++) {
+        const time = (x / samples) * totalTimeSec;
+        const y = amplitude2 * Math.sin(2 * Math.PI * frequency2 * time + phase2);
+        const canvasY = midY - y * (height / 4);
+        wave2Points.push(canvasY);
+        if (x === 0) {
+          ctx.moveTo(x, canvasY);
+        } else {
+          ctx.lineTo(x, canvasY);
+        }
+      }
+      ctx.stroke();
+      
+      // Draw the combined wave in black (sum of wave1 and wave2)
+      ctx.strokeStyle = "#000";
+      ctx.beginPath();
+      for (let x = 0; x < samples; x++) {
+        // Combine the y-values from wave 1 and wave 2
+        const combinedY = wave1Points[x] + wave2Points[x] - midY; 
+        // (subtract midY to adjust for double-counting the midline)
+        if (x === 0) {
+          ctx.moveTo(x, combinedY);
+        } else {
+          ctx.lineTo(x, combinedY);
+        }
+      }
       ctx.stroke();
     }
 
-    // Update parameters and redraw when sliders change
+    // Update parameters from both sets of sliders and redraw
     function updateParameters() {
-      amplitude = parseFloat(amplitudeSlider.value);
-      phase = parseFloat(phaseSlider.value) * Math.PI / 180; // convert degrees to radians
-      period_ms = parseFloat(periodSlider.value);
-      period_sec = period_ms / 1000;
-      frequency = 1 / period_sec;
-
+      // Update Wave 1 parameters
+      amplitude1 = parseFloat(amplitude1Slider.value);
+      phase1 = parseFloat(phase1Slider.value) * Math.PI / 180;
+      period_ms1 = parseFloat(period1Slider.value);
+      period_sec1 = period_ms1 / 1000;
+      frequency1 = 1 / period_sec1;
+      
+      // Update Wave 2 parameters
+      amplitude2 = parseFloat(amplitude2Slider.value);
+      phase2 = parseFloat(phase2Slider.value) * Math.PI / 180;
+      period_ms2 = parseFloat(period2Slider.value);
+      period_sec2 = period_ms2 / 1000;
+      frequency2 = 1 / period_sec2;
+      
       updateDisplays();
-      drawSine();
+      drawSineWaves();
     }
 
-    // Add event listeners for interactivity
-    amplitudeSlider.addEventListener('input', updateParameters);
-    phaseSlider.addEventListener('input', updateParameters);
-    periodSlider.addEventListener('input', updateParameters);
-
+    // Add event listeners for both sets of sliders
+    amplitude1Slider.addEventListener('input', updateParameters);
+    phase1Slider.addEventListener('input', updateParameters);
+    period1Slider.addEventListener('input', updateParameters);
+    
+    amplitude2Slider.addEventListener('input', updateParameters);
+    phase2Slider.addEventListener('input', updateParameters);
+    period2Slider.addEventListener('input', updateParameters);
+    
     // Initial update and draw
     updateParameters();
   </script>
