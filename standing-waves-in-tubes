@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Standing Waves in a Tube</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+      background: #f9f9f9;
+    }
+    h1 {
+      margin-bottom: 0.5em;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+      margin-bottom: 1em;
+    }
+    .radio-group, .slider-group {
+      background: #fff;
+      padding: 1em;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    .radio-group label, .slider-group label {
+      margin-right: 10px;
+    }
+    .slider-group input[type="range"] {
+      width: 200px;
+      margin: 0 10px;
+    }
+    canvas {
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      display: block;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Standing Waves in a Tube</h1>
+
+<div class="controls">
+  <!-- Radio Buttons: Both Ends Open vs. One End Closed -->
+  <div class="radio-group">
+    <label>
+      <input type="radio" name="tubeType" value="open" checked />
+      Both Ends Open
+    </label>
+    <label>
+      <input type="radio" name="tubeType" value="closed" />
+      One End Closed
+    </label>
+  </div>
+
+  <!-- Slider for harmonic number n -->
+  <div class="slider-group">
+    <label for="harmonicSlider">Harmonic (n):</label>
+    <input type="range" id="harmonicSlider" min="1" max="6" step="1" value="1"/>
+    <span id="harmonicValue">1</span>
+  </div>
+</div>
+
+<canvas id="waveCanvas" width="800" height="250"></canvas>
+
+<script>
+  /****************************************************
+   * PARAMETERS & DOM REFERENCES
+   ****************************************************/
+
+  // Tube length (arbitrary units)
+  const L = 1.0;
+
+  // Number of intermediate "phase" curves to draw inside the envelope
+  const NUM_PHASE_LINES = 6;
+
+  // Canvas & Context
+  const canvas = document.getElementById('waveCanvas');
+  const ctx = canvas.getContext('2d');
+  const width = canvas.width;
+  const height = canvas.height;
+
+  // Radio buttons & slider
+  const tubeTypeRadios = document.getElementsByName('tubeType');
+  const harmonicSlider = document.getElementById('harmonicSlider');
+  const harmonicValue = document.getElementById('harmonicValue');
+
+  // Track current state
+  let tubeType = 'open'; // 'open' or 'closed'
+  let n = 1;            // harmonic index
+
+
+  /****************************************************
+   * EVENT LISTENERS
+   ****************************************************/
+  // Tube type change
+  tubeTypeRadios.forEach(radio => {
+    radio.addEventListener('change', (event) => {
+      tubeType = event.target.value;
+      // Reset n to 1 whenever tube type changes
+      n = 1;
+      harmonicSlider.value = 1;
+      harmonicValue.textContent = 1;
+      // Update slider range or disabled notches if desired
+      updateSliderNotches();
+      drawWave();
+    });
+  });
+
+  // Harmonic slider change
+  harmonicSlider.addEventListener('input', () => {
+    n = parseInt(harmonicSlider.value, 10);
+    harmonicValue.textContent = n;
+    drawWave();
+  });
+
+  // Function to enable/disable even values if "closed" is selected
+  function updateSliderNotches() {
+    if (tubeType === 'closed') {
+      // e.g., you might skip even numbers, but for simplicity we just set max=7
+      // and trust the user picks odd. Alternatively, you can dynamically skip them
+      // or show them as disabled in a custom UI. For a quick approach:
+      harmonicSlider.max = 7; // if you want up to n=7
+    } else {
+      // both ends open
+      harmonicSlider.max = 6; // for example, up to n=6
+    }
+  }
+
+
+  /****************************************************
+   * WAVE EQUATIONS
+   ****************************************************/
+  /**
+   * Pressure wave shape for both ends open:
+   *   P(x) = sin(n * pi * x / L)
+   */
+  function pressureOpen(x, n) {
+    return Math.sin((n * Math.PI * x) / L);
+  }
+
+  /**
+   * Pressure wave shape for one end closed:
+   *   P(x) = sin((2n - 1) * pi * x / (2L)) 
+   *   (here n = 1,2,3 => physically 1,3,5,...)
+   */
+  function pressureClosed(x, n) {
+    // If the slider says n=2, physically that means the 3rd harmonic, etc.
+    // But simpler: just use (2n-1) as the factor. So n=1 => 1, n=2 => 3, etc.
+    const m = 2 * n - 1;  // odd integer
+    return Math.sin((m * Math.PI * x) / (2 * L));
+  }
+
+
+  /****************************************************
+   * DRAWING THE STANDING WAVE
+   ****************************************************/
+  function drawWave() {
+    // Clear the canvas
+    ctx.clearRect(0, 0, width, height);
+
+    // Draw baseline
+    const midY = height / 2;
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, midY);
+    ctx.lineTo(width, midY);
+    ctx.stroke();
+
+    // Decide which wave function to use
+    const waveFn = (tubeType === 'open') ? pressureOpen : pressureClosed;
+
+    // 1) Draw the black envelope
+    //    Envelope is basically ±|waveFn(x)| max over time, but for a standing wave
+    //    you can treat the amplitude as "sin(...)". We'll draw the top half
+    //    and the bottom half. We map x in [0, L] to [0, width].
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#000';
+    ctx.beginPath();
+    for (let px = 0; px <= width; px++) {
+      const xPhysical = (px / width) * L;
+      // amplitude at this position is |sin(...)|, but let's keep it as "max amplitude = 1"
+      // for a typical standing wave diagram
+      const val = Math.abs(waveFn(xPhysical, n));
+      const y = midY - val * (height / 2) * 0.9; // 0.9 to leave a margin
+      if (px === 0) {
+        ctx.moveTo(px, y);
+      } else {
+        ctx.lineTo(px, y);
+      }
+    }
+    for (let px = width; px >= 0; px--) {
+      const xPhysical = (px / width) * L;
+      const val = Math.abs(waveFn(xPhysical, n));
+      const y = midY + val * (height / 2) * 0.9;
+      ctx.lineTo(px, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+
+    // 2) Draw multiple “phase” curves inside the envelope (lighter color)
+    //    We can simulate different time snapshots with a phase offset in time
+    //    e.g., wave = sin(kx) * cos(omega t) => just pick different cos(omega t) factors
+    ctx.strokeStyle = 'rgba(0, 128, 255, 0.2)'; // a soft blue
+    ctx.lineWidth = 2;
+
+    for (let phaseIndex = 0; phaseIndex < NUM_PHASE_LINES; phaseIndex++) {
+      // time factor goes from 0 to 2π
+      const timeFactor = (2 * Math.PI * phaseIndex) / NUM_PHASE_LINES;
+      ctx.beginPath();
+      for (let px = 0; px <= width; px++) {
+        const xPhysical = (px / width) * L;
+        // A standing wave can be written as: P(x, t) = sin(kx)*cos(ωt).
+        // We'll approximate that by waveFn(x) * cos(timeFactor).
+        // But waveFn() above is already sin(kx), so multiply by cos(timeFactor).
+        const val = waveFn(xPhysical, n) * Math.cos(timeFactor);
+        const y = midY - val * (height / 2) * 0.9;
+        if (px === 0) {
+          ctx.moveTo(px, y);
+        } else {
+          ctx.lineTo(px, y);
+        }
+      }
+      ctx.stroke();
+    }
+  }
+
+
+  /****************************************************
+   * INIT
+   ****************************************************/
+  // Set up initial UI state
+  updateSliderNotches();
+  harmonicValue.textContent = n.toString();
+
+  // Initial draw
+  drawWave();
+</script>
+
+</body>
+</html>
