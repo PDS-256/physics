@@ -2,21 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Longitudinal Standing Wave: Particles + Pressure Plot</title>
+  <title>Longitudinal Standing Wave: Aesthetic Version</title>
   <style>
     body {
-      font-family: sans-serif;
+      font-family: 'Segoe UI', sans-serif;
       margin: 20px;
-      background: #f9f9f9;
+      background: #eef2f3;
+      color: #333;
     }
     h1 {
       margin-bottom: 0.5em;
+      text-align: center;
     }
     .controls {
       display: flex;
       flex-wrap: wrap;
+      justify-content: center;
       gap: 20px;
-      align-items: center;
       margin-bottom: 1em;
     }
     .radio-group, .slider-group, .button-group {
@@ -24,6 +26,7 @@
       padding: 1em;
       border: 1px solid #ccc;
       border-radius: 6px;
+      box-shadow: 2px 2px 6px rgba(0,0,0,0.1);
     }
     .radio-group label,
     .slider-group label {
@@ -34,11 +37,11 @@
       margin: 0 5px;
     }
     canvas {
-      background: #fff;
+      background: linear-gradient(135deg, #f0f8ff, #e6f7ff);
       border: 1px solid #888;
       border-radius: 6px;
       display: block;
-      margin-top: 20px;
+      margin: 20px auto;
     }
   </style>
 </head>
@@ -51,15 +54,15 @@
   <div class="radio-group">
     <label>
       <input type="radio" name="waveType" value="incoming" checked>
-      Incoming (Red / Red Line)
+      Incoming (Red)
     </label>
     <label>
       <input type="radio" name="waveType" value="reflected">
-      Reflected (Blue / Blue Line)
+      Reflected (Blue)
     </label>
     <label>
       <input type="radio" name="waveType" value="combined">
-      Combined (Black / Black Line)
+      Combined (Black)
     </label>
   </div>
 
@@ -93,36 +96,28 @@
 /*******************************************************
  * 1. GLOBAL PARAMETERS & DOM REFERENCES
  *******************************************************/
- 
-// Physical domain length (x from 0 to L)
-const L = 1.0;
-
-// Amplitudes (tweak these for visualization)
-const A = 0.03;   // For displacement (particle horizontal shift)
-const Ap = 0.5;  // For pressure wave (line plot)
-
-// Frequency & angular frequency (1 Hz demo)
-const f = 1.0;
+const L = 1.0;           // Physical domain length (x from 0 to L)
+const A = 0.10;          // Amplitude for displacement (particles)
+const Ap = 0.15;         // Amplitude for pressure plot
+const f = 1.0;           // Frequency in Hz
 const omega = 2 * Math.PI * f;
+let n = 2;               // Default harmonic number
 
-// Default harmonic number (n)
-let n = 2;
-
-// Animation control
-let dt = 0.03;
+let dt = 0.03;           // Time step (adjustable via slider)
 let time = 0;
 let isAnimating = false;
 
-// Particle visualization
-const numParticles = 2500;
+// Particle visualization parameters
+const numParticles = 500;
 const particles = [];
 
-// Canvas for particles (top) & pressure plot (bottom)
+// Top canvas (particles)
 const particleCanvas = document.getElementById('particleCanvas');
 const pCtx = particleCanvas.getContext('2d');
 const pWidth = particleCanvas.width;
 const pHeight = particleCanvas.height;
 
+// Bottom canvas (pressure plot)
 const pressureCanvas = document.getElementById('pressureCanvas');
 const prCtx = pressureCanvas.getContext('2d');
 const prWidth = pressureCanvas.width;
@@ -144,8 +139,8 @@ const toggleAnimBtn = document.getElementById('toggleAnimBtn');
 /*******************************************************
  * 2. PARTICLE INITIALIZATION
  *******************************************************/
-// Distribute equilibrium positions x0 uniformly in [0, L]
-// and vertical positions randomly in [0, pHeight]
+// Distribute equilibrium positions (x0) uniformly in [0, L]
+// and assign random vertical positions (y) for a cloud-like look.
 for (let i = 0; i < numParticles; i++) {
   const x0 = Math.random() * L;
   const y = Math.random() * pHeight;
@@ -156,16 +151,14 @@ for (let i = 0; i < numParticles; i++) {
 /*******************************************************
  * 3. HELPER FUNCTIONS: Wavenumber and Wave Functions
  *******************************************************/
-// For an open pipe, proper boundary conditions require that displacement
-// has antinodes (maxima) at the open ends and pressure is zero there.
-// We use cosine for displacement and sine for pressure.
-// The wavenumber is: k = nπ / L.
+// Wavenumber k = nπ / L
 function k() {
   return (n * Math.PI) / L;
 }
 
-// Incoming wave (for displacement): A cos(kx - ωt)
-// and for pressure: Ap sin(kx - ωt)
+// For an open pipe, displacement has antinodes at the open ends.
+// We'll use cosine for displacement and sine for pressure.
+// Incoming wave:
 function incomingDisplacement(x, t) {
   return A * Math.cos(k() * x - omega * t);
 }
@@ -173,8 +166,7 @@ function incomingPressure(x, t) {
   return Ap * Math.sin(k() * x - omega * t);
 }
 
-// Reflected wave (for displacement): A cos(kx + ωt)
-// and for pressure: Ap sin(kx + ωt)
+// Reflected wave:
 function reflectedDisplacement(x, t) {
   return A * Math.cos(k() * x + omega * t);
 }
@@ -182,7 +174,7 @@ function reflectedPressure(x, t) {
   return Ap * Math.sin(k() * x + omega * t);
 }
 
-// Combined wave is the sum
+// Combined wave:
 function combinedDisplacement(x, t) {
   return incomingDisplacement(x, t) + reflectedDisplacement(x, t);
 }
@@ -190,8 +182,7 @@ function combinedPressure(x, t) {
   return incomingPressure(x, t) + reflectedPressure(x, t);
 }
 
-// Given the chosen wave type, return an object with appropriate color,
-// displacement function, and pressure function.
+// Return the proper settings for the current wave type.
 function getWaveSettings(waveType) {
   if (waveType === 'incoming') {
     return {
@@ -205,7 +196,7 @@ function getWaveSettings(waveType) {
       displacementFn: reflectedDisplacement,
       pressureFn: reflectedPressure
     };
-  } else { // combined
+  } else {
     return {
       color: 'black',
       displacementFn: combinedDisplacement,
@@ -216,40 +207,45 @@ function getWaveSettings(waveType) {
 
 
 /*******************************************************
- * 4. DRAWING FUNCTIONS: PARTICLE (DISPLACEMENT) VISUALIZATION
+ * 4. DRAWING: PARTICLE VISUALIZATION (TOP CANVAS)
  *******************************************************/
 function drawParticles(t) {
   pCtx.clearRect(0, 0, pWidth, pHeight);
   const { color, displacementFn } = getWaveSettings(waveType);
   pCtx.fillStyle = color;
-  // Map physical domain [0, L] to canvas width
+  // Optionally add a drop shadow to particles:
+  pCtx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+  pCtx.shadowBlur = 4;
   for (let i = 0; i < numParticles; i++) {
     const p = particles[i];
     const disp = displacementFn(p.x0, t);
+    // Map physical x position to canvas width; note p.x0 + disp can be outside [0,L] for visualization
     const xCanvas = (p.x0 + disp) * (pWidth / L);
     const yCanvas = p.y;
     pCtx.beginPath();
     pCtx.arc(xCanvas, yCanvas, 2.5, 0, 2 * Math.PI);
     pCtx.fill();
   }
+  // Reset shadow for subsequent drawings
+  pCtx.shadowBlur = 0;
 }
 
 
 /*******************************************************
- * 5. DRAWING FUNCTIONS: PRESSURE WAVE PLOT
+ * 5. DRAWING: PRESSURE WAVE PLOT (BOTTOM CANVAS)
  *******************************************************/
 function drawPressureWave(t) {
   prCtx.clearRect(0, 0, prWidth, prHeight);
-  // Draw baseline (midline)
   const midY = prHeight / 2;
   const { color, pressureFn } = getWaveSettings(waveType);
-  prCtx.strokeStyle = color;
   prCtx.lineWidth = 3;
+  prCtx.strokeStyle = color;
+  
   prCtx.beginPath();
   for (let px = 0; px <= prWidth; px++) {
     const xPhysical = (px / prWidth) * L;
     const val = pressureFn(xPhysical, t);
-    const scaleY = prHeight * 0.4; // 40% of canvas height for vertical scaling
+    const scaleY = prHeight * 0.4; // vertical scaling for pressure wave
     const yCanvas = midY - val * scaleY;
     if (px === 0) {
       prCtx.moveTo(px, yCanvas);
@@ -258,11 +254,23 @@ function drawPressureWave(t) {
     }
   }
   prCtx.stroke();
+  
+  // Create a gradient fill under the curve for aesthetics.
+  const grad = prCtx.createLinearGradient(0, 0, 0, prHeight);
+  grad.addColorStop(0, color);
+  grad.addColorStop(1, 'white');
+  prCtx.lineTo(prWidth, midY);
+  prCtx.lineTo(0, midY);
+  prCtx.closePath();
+  prCtx.globalAlpha = 0.3;
+  prCtx.fillStyle = grad;
+  prCtx.fill();
+  prCtx.globalAlpha = 1.0;
 }
 
 
 /*******************************************************
- * 6. MASTER DRAW: Both Canvases
+ * 6. MASTER DRAW FUNCTION: BOTH CANVASES
  *******************************************************/
 function drawAll(t) {
   drawParticles(t);
@@ -295,7 +303,7 @@ function animate() {
 /*******************************************************
  * 8. EVENT LISTENERS & INITIALIZATION
  *******************************************************/
-// Wave type radio buttons
+// Wave Type radio buttons
 waveTypeRadios.forEach(radio => {
   radio.addEventListener('change', (event) => {
     waveType = event.target.value;
@@ -311,7 +319,7 @@ harmonicSlider.addEventListener('input', () => {
   drawAll(time);
 });
 
-// Animation speed slider
+// Speed slider
 speedSlider.addEventListener('input', () => {
   dt = parseFloat(speedSlider.value);
   speedValue.textContent = dt.toFixed(2);
@@ -326,11 +334,12 @@ toggleAnimBtn.addEventListener('click', () => {
   }
 });
 
-// Initialize readouts
+// Initialize readouts and start with an initial draw
 harmonicValue.textContent = n.toString();
 speedValue.textContent = dt.toFixed(2);
-// Start with an initial draw (and optionally auto-start animation)
 drawAll(0);
+// Optionally, auto-start the animation:
+// startAnimation();
 </script>
 
 </body>
