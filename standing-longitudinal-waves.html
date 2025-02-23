@@ -76,8 +76,7 @@
   <!-- Animation Speed Slider -->
   <div class="slider-group">
     <label for="speedSlider">Animation Speed:</label>
-    <input type="range" id="speedSlider" min="0.01" max="0.10" step="0.01" value="0.03">
-    <span id="speedValue">0.03</span>
+    <input type="range" id="speedSlider" min="0.005" max="0.020" step="0.005" value="0.010">
   </div>
 
   <!-- Play/Pause Button -->
@@ -97,8 +96,8 @@
  * 1. GLOBAL PARAMETERS & DOM REFERENCES
  *******************************************************/
 const L = 1.0;           // Physical domain length (x from 0 to L)
-const A = 0.10;          // Amplitude for displacement (particles)
-const Ap = 0.15;         // Amplitude for pressure plot
+const A = 0.07;          // Amplitude for displacement (particles)
+const Ap = 0.30;         // Amplitude for pressure plot
 const f = 1.0;           // Frequency in Hz
 const omega = 2 * Math.PI * f;
 let n = 2;               // Default harmonic number
@@ -108,7 +107,7 @@ let time = 0;
 let isAnimating = false;
 
 // Particle visualization parameters
-const numParticles = 500;
+const numParticles = 2500;
 const particles = [];
 
 // Top canvas (particles)
