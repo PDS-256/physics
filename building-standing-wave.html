@@ -71,6 +71,13 @@
     <span id="harmonicValue">3</span>
   </div>
 
+  <!-- Animation speed slider -->
+  <div class="slider-group">
+    <label for="speedSlider">Animation Speed:</label>
+    <input type="range" id="speedSlider" min="0.01" max="0.2" step="0.01" value="0.04">
+    <span id="speedValue">0.04</span>
+  </div>
+
   <!-- Play/Pause Animation -->
   <div class="button-group">
     <button id="toggleAnimBtn">Play</button>
@@ -85,7 +92,8 @@
    ****************************************************/
   // Pipe length (in abstract units) — we map x from 0 to L.
   const L = 1.0;
-  const A = 1.0;  // amplitude
+  // Reduced amplitude (so that combined wave fits nicely in the window)
+  const A = 0.5;
 
   // Define margins for drawing the pipe
   const marginLeft = 80;
@@ -111,29 +119,37 @@
   const toggleCombined = document.getElementById('toggleCombined');
   const harmonicSlider = document.getElementById('harmonicSlider');
   const harmonicValue = document.getElementById('harmonicValue');
+  const speedSlider = document.getElementById('speedSlider');
+  const speedValue = document.getElementById('speedValue');
   const toggleAnimBtn = document.getElementById('toggleAnimBtn');
 
   // State variables
   let n = parseInt(harmonicSlider.value, 10); // harmonic number (n=1,2,3,4)
   let isAnimating = false;
   let time = 0;
-  const dt = 0.04;
+  // dt is now adjustable via the speed slider.
+  let dt = parseFloat(speedSlider.value);
   
-  // For demonstration, choose an angular frequency.
-  // We choose ω such that one full oscillation takes about 2π/ω seconds.
+  // Angular frequency (ω). One full oscillation is 2π/ω seconds.
   const omega = 2 * Math.PI * 1;  
-  // The wavenumber k for an open pipe (pressure standing wave) is:
-  //   k = nπ / L, so wavelength λ = 2L/n.
-  
+  // For an open pipe, the wavenumber is: k = nπ / L.
+  function k() {
+    return (n * Math.PI) / L;
+  }
+
   /****************************************************
    * EVENT LISTENERS
    ****************************************************/
   harmonicSlider.addEventListener('input', () => {
     n = parseInt(harmonicSlider.value, 10);
     harmonicValue.textContent = n.toString();
-    // When harmonic changes, reset time so the pattern is clear.
     time = 0;
     drawFrame(0);
+  });
+
+  speedSlider.addEventListener('input', () => {
+    dt = parseFloat(speedSlider.value);
+    speedValue.textContent = dt.toFixed(2);
   });
 
   toggleAnimBtn.addEventListener('click', () => {
@@ -144,7 +160,6 @@
     }
   });
 
-  // When checkboxes change, just redraw.
   toggleIncoming.addEventListener('change', () => { drawFrame(time); });
   toggleReflected.addEventListener('change', () => { drawFrame(time); });
   toggleCombined.addEventListener('change', () => { drawFrame(time); });
@@ -152,25 +167,19 @@
   /****************************************************
    * WAVE EQUATIONS
    ****************************************************/
-  // Wavenumber based on harmonic:
-  function k() {
-    return (n * Math.PI) / L;
-  }
-  // Choose a fixed amplitude A = 1.
-
-  // Incoming wave: traveling to the right.
-  //  y_inc(x,t) = A sin(k x - ω t)
+  // Incoming wave: traveling right.
+  // y_inc(x, t) = A sin(k x - ω t)
   function incomingWave(x, t) {
     return A * Math.sin(k() * x - omega * t);
   }
-  // Reflected wave: traveling to the left.
-  //  y_ref(x,t) = A sin(k x + ω t)
-  // Note: At x=0, y_inc = A sin(-ω t) and y_ref = A sin(ω t)
-  // So y_inc + y_ref = A [sin(-ω t)+ sin(ω t)] = 0, giving a node.
+
+  // Reflected wave: traveling left.
+  // y_ref(x, t) = A sin(k x + ω t)
   function reflectedWave(x, t) {
     return A * Math.sin(k() * x + omega * t);
   }
-  // Combined wave: simply the sum of the two.
+
+  // Combined wave: the sum of incoming and reflected waves.
   function combinedWave(x, t) {
     return incomingWave(x, t) + reflectedWave(x, t);
   }
@@ -178,37 +187,35 @@
   /****************************************************
    * DRAWING FUNCTIONS
    ****************************************************/
-  // Draw the pipe (open at both ends) as a rectangle with vertical walls.
+  // Draw the pipe as a horizontal channel with vertical walls.
   function drawPipe() {
     ctx.lineWidth = 6;
     ctx.strokeStyle = 'gray';
-    // Draw vertical walls at the ends
+    // Left wall
     ctx.beginPath();
     ctx.moveTo(pipeX0, marginTop);
     ctx.lineTo(pipeX0, height - marginBottom);
     ctx.stroke();
-    
+    // Right wall
     ctx.beginPath();
     ctx.moveTo(pipeX1, marginTop);
     ctx.lineTo(pipeX1, height - marginBottom);
     ctx.stroke();
   }
 
-  // Draw a wave given a function waveFn(x,t) and a color.
+  // Draw a wave given a function waveFn(x,t) and a specified color.
   function drawWave(waveFn, t, color) {
     ctx.lineWidth = 3;
     ctx.strokeStyle = color;
     ctx.beginPath();
-    // Sample points across the pipe from x=0 to x=L.
     const samples = pipeWidth;
     for (let i = 0; i <= samples; i++) {
       const xPhysical = (i / samples) * L;
       const yVal = waveFn(xPhysical, t);
       // Map xPhysical from [0, L] to [pipeX0, pipeX1]
       const cx = pipeX0 + (xPhysical / L) * pipeWidth;
-      // For visualization, scale the wave vertically.
-      // We'll let the vertical amplitude span, say, 40% of the pipe height.
-      const scaleY = (pipeWidth * 0.2);
+      // Scale the wave vertically (40% of the pipe width)
+      const scaleY = pipeWidth * 0.2;
       const cy = midY - yVal * scaleY;
       if (i === 0) {
         ctx.moveTo(cx, cy);
@@ -258,8 +265,8 @@
   /****************************************************
    * INITIALIZATION
    ****************************************************/
-  // Set default harmonic value to 3 (from the slider)
   harmonicValue.textContent = n.toString();
+  speedValue.textContent = dt.toFixed(2);
   drawFrame(0);
 </script>
 
