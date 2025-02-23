@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Longitudinal Standing Wave: Particles + Pressure Plot</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+      background: #f9f9f9;
+    }
+    h1 {
+      margin-bottom: 0.5em;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+      margin-bottom: 1em;
+    }
+    .radio-group, .slider-group, .button-group {
+      background: #fff;
+      padding: 1em;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    .radio-group label,
+    .slider-group label {
+      margin-right: 10px;
+    }
+    .slider-group input[type="range"] {
+      width: 150px;
+      margin: 0 5px;
+    }
+    canvas {
+      background: #fff;
+      border: 1px solid #888;
+      border-radius: 6px;
+      display: block;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Longitudinal Standing Wave: Particles + Pressure Plot</h1>
+
+<div class="controls">
+  <!-- Wave Type Radio Buttons -->
+  <div class="radio-group">
+    <label>
+      <input type="radio" name="waveType" value="incoming" checked>
+      Incoming (Red / Red Line)
+    </label>
+    <label>
+      <input type="radio" name="waveType" value="reflected">
+      Reflected (Blue / Blue Line)
+    </label>
+    <label>
+      <input type="radio" name="waveType" value="combined">
+      Combined (Black / Black Line)
+    </label>
+  </div>
+
+  <!-- Harmonic Slider -->
+  <div class="slider-group">
+    <label for="harmonicSlider">Harmonic (n):</label>
+    <input type="range" id="harmonicSlider" min="1" max="5" step="1" value="2">
+    <span id="harmonicValue">2</span>
+  </div>
+
+  <!-- Animation Speed Slider -->
+  <div class="slider-group">
+    <label for="speedSlider">Animation Speed:</label>
+    <input type="range" id="speedSlider" min="0.01" max="0.10" step="0.01" value="0.03">
+    <span id="speedValue">0.03</span>
+  </div>
+
+  <!-- Play/Pause Button -->
+  <div class="button-group">
+    <button id="toggleAnimBtn">Play</button>
+  </div>
+</div>
+
+<!-- Top Canvas: Particle Visualization (Displacement) -->
+<canvas id="particleCanvas" width="900" height="300"></canvas>
+
+<!-- Bottom Canvas: Pressure Wave Plot -->
+<canvas id="pressureCanvas" width="900" height="200"></canvas>
+
+<script>
+/*******************************************************
+ * 1. GLOBAL PARAMETERS & DOM REFERENCES
+ *******************************************************/
+ 
+// Physical domain length (x from 0 to L)
+const L = 1.0;
+
+// Amplitudes (tweak these for visualization)
+const A = 0.03;   // For displacement (particle horizontal shift)
+const Ap = 0.5;  // For pressure wave (line plot)
+
+// Frequency & angular frequency (1 Hz demo)
+const f = 1.0;
+const omega = 2 * Math.PI * f;
+
+// Default harmonic number (n)
+let n = 2;
+
+// Animation control
+let dt = 0.03;
+let time = 0;
+let isAnimating = false;
+
+// Particle visualization
+const numParticles = 2500;
+const particles = [];
+
+// Canvas for particles (top) & pressure plot (bottom)
+const particleCanvas = document.getElementById('particleCanvas');
+const pCtx = particleCanvas.getContext('2d');
+const pWidth = particleCanvas.width;
+const pHeight = particleCanvas.height;
+
+const pressureCanvas = document.getElementById('pressureCanvas');
+const prCtx = pressureCanvas.getContext('2d');
+const prWidth = pressureCanvas.width;
+const prHeight = pressureCanvas.height;
+
+// UI elements
+const waveTypeRadios = document.getElementsByName('waveType');
+let waveType = 'incoming';
+
+const harmonicSlider = document.getElementById('harmonicSlider');
+const harmonicValue = document.getElementById('harmonicValue');
+
+const speedSlider = document.getElementById('speedSlider');
+const speedValue = document.getElementById('speedValue');
+
+const toggleAnimBtn = document.getElementById('toggleAnimBtn');
+
+
+/*******************************************************
+ * 2. PARTICLE INITIALIZATION
+ *******************************************************/
+// Distribute equilibrium positions x0 uniformly in [0, L]
+// and vertical positions randomly in [0, pHeight]
+for (let i = 0; i < numParticles; i++) {
+  const x0 = Math.random() * L;
+  const y = Math.random() * pHeight;
+  particles.push({ x0, y });
+}
+
+
+/*******************************************************
+ * 3. HELPER FUNCTIONS: Wavenumber and Wave Functions
+ *******************************************************/
+// For an open pipe, proper boundary conditions require that displacement
+// has antinodes (maxima) at the open ends and pressure is zero there.
+// We use cosine for displacement and sine for pressure.
+// The wavenumber is: k = nπ / L.
+function k() {
+  return (n * Math.PI) / L;
+}
+
+// Incoming wave (for displacement): A cos(kx - ωt)
+// and for pressure: Ap sin(kx - ωt)
+function incomingDisplacement(x, t) {
+  return A * Math.cos(k() * x - omega * t);
+}
+function incomingPressure(x, t) {
+  return Ap * Math.sin(k() * x - omega * t);
+}
+
+// Reflected wave (for displacement): A cos(kx + ωt)
+// and for pressure: Ap sin(kx + ωt)
+function reflectedDisplacement(x, t) {
+  return A * Math.cos(k() * x + omega * t);
+}
+function reflectedPressure(x, t) {
+  return Ap * Math.sin(k() * x + omega * t);
+}
+
+// Combined wave is the sum
+function combinedDisplacement(x, t) {
+  return incomingDisplacement(x, t) + reflectedDisplacement(x, t);
+}
+function combinedPressure(x, t) {
+  return incomingPressure(x, t) + reflectedPressure(x, t);
+}
+
+// Given the chosen wave type, return an object with appropriate color,
+// displacement function, and pressure function.
+function getWaveSettings(waveType) {
+  if (waveType === 'incoming') {
+    return {
+      color: 'red',
+      displacementFn: incomingDisplacement,
+      pressureFn: incomingPressure
+    };
+  } else if (waveType === 'reflected') {
+    return {
+      color: 'blue',
+      displacementFn: reflectedDisplacement,
+      pressureFn: reflectedPressure
+    };
+  } else { // combined
+    return {
+      color: 'black',
+      displacementFn: combinedDisplacement,
+      pressureFn: combinedPressure
+    };
+  }
+}
+
+
+/*******************************************************
+ * 4. DRAWING FUNCTIONS: PARTICLE (DISPLACEMENT) VISUALIZATION
+ *******************************************************/
+function drawParticles(t) {
+  pCtx.clearRect(0, 0, pWidth, pHeight);
+  const { color, displacementFn } = getWaveSettings(waveType);
+  pCtx.fillStyle = color;
+  // Map physical domain [0, L] to canvas width
+  for (let i = 0; i < numParticles; i++) {
+    const p = particles[i];
+    const disp = displacementFn(p.x0, t);
+    const xCanvas = (p.x0 + disp) * (pWidth / L);
+    const yCanvas = p.y;
+    pCtx.beginPath();
+    pCtx.arc(xCanvas, yCanvas, 2.5, 0, 2 * Math.PI);
+    pCtx.fill();
+  }
+}
+
+
+/*******************************************************
+ * 5. DRAWING FUNCTIONS: PRESSURE WAVE PLOT
+ *******************************************************/
+function drawPressureWave(t) {
+  prCtx.clearRect(0, 0, prWidth, prHeight);
+  // Draw baseline (midline)
+  const midY = prHeight / 2;
+  const { color, pressureFn } = getWaveSettings(waveType);
+  prCtx.strokeStyle = color;
+  prCtx.lineWidth = 3;
+  prCtx.beginPath();
+  for (let px = 0; px <= prWidth; px++) {
+    const xPhysical = (px / prWidth) * L;
+    const val = pressureFn(xPhysical, t);
+    const scaleY = prHeight * 0.4; // 40% of canvas height for vertical scaling
+    const yCanvas = midY - val * scaleY;
+    if (px === 0) {
+      prCtx.moveTo(px, yCanvas);
+    } else {
+      prCtx.lineTo(px, yCanvas);
+    }
+  }
+  prCtx.stroke();
+}
+
+
+/*******************************************************
+ * 6. MASTER DRAW: Both Canvases
+ *******************************************************/
+function drawAll(t) {
+  drawParticles(t);
+  drawPressureWave(t);
+}
+
+
+/*******************************************************
+ * 7. ANIMATION LOOP
+ *******************************************************/
+function startAnimation() {
+  isAnimating = true;
+  toggleAnimBtn.textContent = 'Pause';
+  requestAnimationFrame(animate);
+}
+
+function stopAnimation() {
+  isAnimating = false;
+  toggleAnimBtn.textContent = 'Play';
+}
+
+function animate() {
+  if (!isAnimating) return;
+  time += dt;
+  drawAll(time);
+  requestAnimationFrame(animate);
+}
+
+
+/*******************************************************
+ * 8. EVENT LISTENERS & INITIALIZATION
+ *******************************************************/
+// Wave type radio buttons
+waveTypeRadios.forEach(radio => {
+  radio.addEventListener('change', (event) => {
+    waveType = event.target.value;
+    drawAll(time);
+  });
+});
+
+// Harmonic slider
+harmonicSlider.addEventListener('input', () => {
+  n = parseInt(harmonicSlider.value, 10);
+  harmonicValue.textContent = n.toString();
+  time = 0;
+  drawAll(time);
+});
+
+// Animation speed slider
+speedSlider.addEventListener('input', () => {
+  dt = parseFloat(speedSlider.value);
+  speedValue.textContent = dt.toFixed(2);
+});
+
+// Play/Pause button
+toggleAnimBtn.addEventListener('click', () => {
+  if (isAnimating) {
+    stopAnimation();
+  } else {
+    startAnimation();
+  }
+});
+
+// Initialize readouts
+harmonicValue.textContent = n.toString();
+speedValue.textContent = dt.toFixed(2);
+// Start with an initial draw (and optionally auto-start animation)
+drawAll(0);
+</script>
+
+</body>
+</html>
