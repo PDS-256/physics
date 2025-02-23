@@ -79,7 +79,7 @@
 
   <!-- Play/Pause Animation -->
   <div class="button-group">
-    <button id="toggleAnimBtn">Play</button>
+    <button id="toggleAnimBtn">Pause</button>
   </div>
 </div>
 
@@ -91,8 +91,8 @@
    ****************************************************/
   // Pipe length (in abstract units) — we map x from 0 to L.
   const L = 1.0;
-  // Reduced amplitude (so that combined wave fits nicely in the window)
-  const A = 0.5;
+  // Reduced amplitude so the combined wave fits nicely in the window.
+  const A = 0.4;
 
   // Define margins for drawing the pipe
   const marginLeft = 80;
@@ -119,12 +119,11 @@
   const harmonicSlider = document.getElementById('harmonicSlider');
   const harmonicValue = document.getElementById('harmonicValue');
   const speedSlider = document.getElementById('speedSlider');
-  const speedValue = document.getElementById('speedValue');
   const toggleAnimBtn = document.getElementById('toggleAnimBtn');
 
   // State variables
-  let n = parseInt(harmonicSlider.value, 10); // harmonic number (n=1,2,3,4)
-  let isAnimating = false;
+  let n = parseInt(harmonicSlider.value, 10); // harmonic number (n=1,2,3,4,...)
+  let isAnimating = true; // Start animating automatically.
   let time = 0;
   // dt is now adjustable via the speed slider.
   let dt = parseFloat(speedSlider.value);
@@ -148,7 +147,6 @@
 
   speedSlider.addEventListener('input', () => {
     dt = parseFloat(speedSlider.value);
-    speedValue.textContent = dt.toFixed(2);
   });
 
   toggleAnimBtn.addEventListener('click', () => {
@@ -190,12 +188,12 @@
   function drawPipe() {
     ctx.lineWidth = 6;
     ctx.strokeStyle = 'gray';
-    // Left wall
+    // Top wall
     ctx.beginPath();
     ctx.moveTo(pipeX0, marginTop);
     ctx.lineTo(pipeX1, marginTop);
     ctx.stroke();
-    // Right wall
+    // Bottom wall
     ctx.beginPath();
     ctx.moveTo(pipeX0, height - marginBottom);
     ctx.lineTo(pipeX1, height - marginBottom);
@@ -265,8 +263,9 @@
    * INITIALIZATION
    ****************************************************/
   harmonicValue.textContent = n.toString();
-  speedValue.textContent = dt.toFixed(2);
   drawFrame(0);
+  // Automatically start animation on page load.
+  startAnimation();
 </script>
 
 </body>
