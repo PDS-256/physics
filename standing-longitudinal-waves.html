@@ -96,7 +96,7 @@
  * 1. GLOBAL PARAMETERS & DOM REFERENCES
  *******************************************************/
 const L = 1.0;           // Physical domain length (x from 0 to L)
-const A = 0.07;          // Amplitude for displacement (particles)
+const A = 0.07;          // Amplitude for displacement (particles) -- will be scaled by 1/n
 const Ap = 0.30;         // Amplitude for pressure plot
 const f = 1.0;           // Frequency in Hz
 const omega = 2 * Math.PI * f;
@@ -157,9 +157,9 @@ function k() {
 
 // For an open pipe, displacement has antinodes at the open ends.
 // We'll use cosine for displacement and sine for pressure.
-// Incoming wave:
+// Scale displacement amplitude by 1/n.
 function incomingDisplacement(x, t) {
-  return A * Math.cos(k() * x - omega * t);
+  return (A / n) * Math.cos(k() * x - omega * t);
 }
 function incomingPressure(x, t) {
   return Ap * Math.sin(k() * x - omega * t);
@@ -167,7 +167,7 @@ function incomingPressure(x, t) {
 
 // Reflected wave:
 function reflectedDisplacement(x, t) {
-  return A * Math.cos(k() * x + omega * t);
+  return (A / n) * Math.cos(k() * x + omega * t);
 }
 function reflectedPressure(x, t) {
   return Ap * Math.sin(k() * x + omega * t);
