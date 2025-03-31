@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Fourier Transform of a Gaussian</title>
+  <style>
+    body { 
+      background-color: #d0d0d0; 
+      font-family: sans-serif; 
+      font-size: 15px; 
+      margin: 0;
+      padding: 20px;
+    }
+    .container { 
+      width: 650px; 
+      margin: auto; 
+      background: white; 
+      padding: 20px; 
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    canvas { 
+      background-color: white; 
+      border: 1px solid gray; 
+      display: block; 
+      margin: 10px auto;
+    }
+    .customslider { width: 200px; vertical-align: middle; }
+    .control { text-align: center; margin: 10px 0; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1 style="text-align:center;">Fourier Transform of a Gaussian</h1>
+  
+  <!-- Controls for L and k -->
+  <div class="control">
+    <label for="LSlider">L (width): </label>
+    <input type="range" id="LSlider" min="0.2" max="3" step="0.1" value="1" class="customslider">
+    <span id="LValue">1.0</span>
+    &nbsp;&nbsp;
+    <label for="kSlider">k: </label>
+    <!-- k slider range updated from -5 to 5 -->
+    <input type="range" id="kSlider" min="-5" max="5" step="0.1" value="1" class="customslider">
+    <span id="kValue">1.0</span>
+  </div>
+  
+  <!-- Canvas for the ψ(x) plots (3 subplots) -->
+  <canvas id="canvas_x" width="600" height="400"></canvas>
+  <!-- Canvas for the ψ(k) plot -->
+  <canvas id="canvas_k" width="600" height="300"></canvas>
+  
+  <!-- Display computed ψ(k) -->
+  <div style="text-align:center;">
+    <p>Computed ψ(k): Re = <span id="psiRe">0</span>, Im = <span id="psiIm">0</span></p>
+  </div>
+  
+  <p style="font-size:0.9em; text-align:center;">Note: The top canvas shows ψ(x) and its overlap with cos(kx) and sin(kx), with the middle and bottom plots shading the product functions used in the integration. The lower canvas plots the Fourier transform (ψ(k)) over a range of k, with a red dashed line marking the current k value.</p>
+</div>
+
+<script>
+  // Get references to canvases and controls
+  let canvasX = document.getElementById("canvas_x");
+  let ctxX = canvasX.getContext("2d");
+  let canvasK = document.getElementById("canvas_k");
+  let ctxK = canvasK.getContext("2d");
+  
+  let LSlider = document.getElementById("LSlider");
+  let kSlider = document.getElementById("kSlider");
+  let LValueSpan = document.getElementById("LValue");
+  let kValueSpan = document.getElementById("kValue");
+  let psiReSpan = document.getElementById("psiRe");
+  let psiImSpan = document.getElementById("psiIm");
+  
+  // Parameters
+  let L = parseFloat(LSlider.value);
+  let kCurrent = parseFloat(kSlider.value);
+  
+  // Domain for x
+  const N = 500;
+  let xArray = [];
+  let psiArray = [];
+  
+  // Constant factor used in the integration for psi(k)
+  const normFactor = 1 / (Math.sqrt(2) * Math.PI);
+  
+  // Create x-array from -5L to 5L
+  function updateXArray() {
+    xArray = [];
+    let xMin = -5 * L;
+    let xMax = 5 * L;
+    let dx = (xMax - xMin) / (N - 1);
+    for (let i = 0; i < N; i++) {
+      let x = xMin + i * dx;
+      xArray.push(x);
+    }
+  }
+  
+  // Compute the Gaussian ψ(x)
+  function computePsi() {
+    psiArray = [];
+    let coeff = Math.pow(2/(Math.PI * L * L), 0.25);
+    for (let i = 0; i < xArray.length; i++) {
+      let x = xArray[i];
+      psiArray.push( coeff * Math.exp( - (x/L)*(x/L) ) );
+    }
+  }
+  
+  // Trapezoidal integration helper
+  function trapezoidal(x, f) {
+    let sum = 0;
+    for (let i = 0; i < x.length - 1; i++) {
+      let dx = x[i+1] - x[i];
+      sum += 0.5 * (f[i] + f[i+1]) * dx;
+    }
+    return sum;
+  }
+  
+  // Compute Fourier transform for a given k value:
+  // A1 = (1/(sqrt(2)*pi)) ∫ ψ(x) cos(kx) dx, A2 = (1/(sqrt(2)*pi)) ∫ -ψ(x) sin(kx) dx
+  function computePsiK(kVal) {
+    let fCos = [];
+    let fSin = [];
+    for (let i = 0; i < xArray.length; i++) {
+      let x = xArray[i];
+      fCos.push( Math.cos(kVal * x) * psiArray[i] );
+      fSin.push( -Math.sin(kVal * x) * psiArray[i] );
+    }
+    let A1 = normFactor * trapezoidal(xArray, fCos);
+    let A2 = normFactor * trapezoidal(xArray, fSin);
+    return {re: A1, im: A2};
+  }
+  
+  // Draw a line plot in a given subregion of a canvas
+  // offsetX, offsetY: top-left of the subregion, plotWidth, plotHeight: dimensions.
+  // dataX: array of x values, func(i) returns y for index i.
+  // xMin, xMax, yMin, yMax: axis limits. 'color' is the line color.
+  function drawPlot(ctx, offsetX, offsetY, plotWidth, plotHeight, dataX, func, xMin, xMax, yMin, yMax, color) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    for (let i = 0; i < dataX.length; i++) {
+      let xVal = dataX[i];
+      let yVal = func(i);
+      let px = offsetX + ((xVal - xMin) / (xMax - xMin)) * plotWidth;
+      let py = offsetY + plotHeight - ((yVal - yMin) / (yMax - yMin)) * plotHeight;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+  
+  // Draw a filled plot to shade the area under the curve
+  function drawFilledPlot(ctx, offsetX, offsetY, plotWidth, plotHeight, dataX, dataY, xMin, xMax, yMin, yMax) {
+    ctx.save();
+    // Draw the curve
+    ctx.beginPath();
+    ctx.strokeStyle = "black";
+    for (let i = 0; i < dataX.length; i++) {
+      let xVal = dataX[i];
+      let yVal = dataY[i];
+      let px = offsetX + ((xVal - xMin) / (xMax - xMin)) * plotWidth;
+      let py = offsetY + plotHeight - ((yVal - yMin) / (yMax - yMin)) * plotHeight;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    
+    // Fill positive areas in skyblue
+    ctx.beginPath();
+    for (let i = 0; i < dataX.length; i++) {
+      let xVal = dataX[i];
+      let yVal = dataY[i];
+      let px = offsetX + ((xVal - xMin) / (xMax - xMin)) * plotWidth;
+      let py = offsetY + plotHeight - ((Math.max(yVal, 0) - yMin) / (yMax - yMin)) * plotHeight;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    let baseY = offsetY + plotHeight - ((0 - yMin) / (yMax - yMin)) * plotHeight;
+    ctx.lineTo(offsetX + plotWidth, baseY);
+    ctx.lineTo(offsetX, baseY);
+    ctx.closePath();
+    ctx.fillStyle = "skyblue";
+    ctx.fill();
+    
+    // Fill negative areas in orange
+    ctx.beginPath();
+    for (let i = 0; i < dataX.length; i++) {
+      let xVal = dataX[i];
+      let yVal = dataY[i];
+      let px = offsetX + ((xVal - xMin) / (xMax - xMin)) * plotWidth;
+      let py = offsetY + plotHeight - ((Math.min(yVal, 0) - yMin) / (yMax - yMin)) * plotHeight;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.lineTo(offsetX + plotWidth, baseY);
+    ctx.lineTo(offsetX, baseY);
+    ctx.closePath();
+    ctx.fillStyle = "orange";
+    ctx.fill();
+    
+    ctx.restore();
+  }
+  
+  // Draw the three subplots for ψ(x)
+  function drawCanvasX() {
+    ctxX.clearRect(0, 0, canvasX.width, canvasX.height);
+    let width = canvasX.width;
+    let height = canvasX.height;
+    let subplotHeight = height / 3;
+    
+    let xMin = xArray[0];
+    let xMax = xArray[xArray.length-1];
+    
+    // Top subplot: plot ψ(x), cos(kx), and sin(kx) with fixed vertical range [-1.2, 1.2]
+    drawPlot(ctxX, 0, 0, width, subplotHeight, xArray, 
+      function(i){ return psiArray[i]; }, xMin, xMax, -1.2, 1.2, "black");
+    drawPlot(ctxX, 0, 0, width, subplotHeight, xArray, 
+      function(i){ return Math.cos(kCurrent * xArray[i]); }, xMin, xMax, -1.2, 1.2, "orange");
+    drawPlot(ctxX, 0, 0, width, subplotHeight, xArray, 
+      function(i){ return Math.sin(kCurrent * xArray[i]); }, xMin, xMax, -1.2, 1.2, "blue");
+    
+    // Middle subplot: plot ψ(x)·cos(kx) with shading
+    let product1 = [];
+    for (let i = 0; i < xArray.length; i++) {
+      product1.push( psiArray[i] * Math.cos(kCurrent * xArray[i]) );
+    }
+    let ymin1 = Math.min(...product1);
+    let ymax1 = Math.max(...product1);
+    let margin1 = 0.1 * (ymax1 - ymin1);
+    drawFilledPlot(ctxX, 0, subplotHeight, width, subplotHeight, xArray, product1, xMin, xMax, ymin1 - margin1, ymax1 + margin1);
+    
+    // Bottom subplot: plot ψ(x)·sin(kx) with shading
+    let product2 = [];
+    for (let i = 0; i < xArray.length; i++) {
+      product2.push( psiArray[i] * Math.sin(kCurrent * xArray[i]) );
+    }
+    let ymin2 = Math.min(...product2);
+    let ymax2 = Math.max(...product2);
+    let margin2 = 0.1 * (ymax2 - ymin2);
+    drawFilledPlot(ctxX, 0, 2*subplotHeight, width, subplotHeight, xArray, product2, xMin, xMax, ymin2 - margin2, ymax2 + margin2);
+  }
+  
+  // Helper to draw a line from arrays (used in the ψ(k) plot)
+  function drawLine(ctx, xData, yData, xMin, xMax, yMin, yMax, width, height, color) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    for (let i = 0; i < xData.length; i++) {
+      let xVal = xData[i];
+      let yVal = yData[i];
+      let px = ((xVal - xMin) / (xMax - xMin)) * width;
+      let py = height - ((yVal - yMin) / (yMax - yMin)) * height;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+  
+  // Draw the ψ(k) plot (both real and imaginary parts vs. k)
+  function drawCanvasK() {
+    ctxK.clearRect(0, 0, canvasK.width, canvasK.height);
+    let width = canvasK.width;
+    let height = canvasK.height;
+    
+    let kMin = parseFloat(kSlider.min);
+    let kMax = parseFloat(kSlider.max);
+    let numK = 100;
+    let kValues = [];
+    let reValues = [];
+    let imValues = [];
+    for (let i = 0; i < numK; i++) {
+      let kVal = kMin + i * (kMax - kMin) / (numK - 1);
+      kValues.push(kVal);
+      let psiK = computePsiK(kVal);
+      reValues.push(psiK.re);
+      imValues.push(psiK.im);
+    }
+    
+    // Determine vertical range for the plot
+    let allVals = reValues.concat(imValues);
+    let yMin = Math.min(...allVals);
+    let yMax = Math.max(...allVals);
+    let margin = 0.1 * (yMax - yMin);
+    yMin -= margin;
+    yMax += margin;
+    
+    // Plot real part (orange) and imaginary part (blue)
+    drawLine(ctxK, kValues, reValues, kMin, kMax, yMin, yMax, width, height, "orange");
+    drawLine(ctxK, kValues, imValues, kMin, kMax, yMin, yMax, width, height, "blue");
+    
+    // Mark the current k with a red dashed vertical line
+    let currentK = kCurrent;
+    let px = ((currentK - kMin) / (kMax - kMin)) * width;
+    ctxK.save();
+    ctxK.strokeStyle = "red";
+    ctxK.setLineDash([5, 3]);
+    ctxK.beginPath();
+    ctxK.moveTo(px, 0);
+    ctxK.lineTo(px, height);
+    ctxK.stroke();
+    ctxK.restore();
+  }
+  
+  // Main update routine: update parameters, recompute arrays and integrals, redraw canvases, and update text.
+  function update() {
+    L = parseFloat(LSlider.value);
+    kCurrent = parseFloat(kSlider.value);
+    LValueSpan.textContent = L.toFixed(1);
+    kValueSpan.textContent = kCurrent.toFixed(1);
+    
+    updateXArray();
+    computePsi();
+    let psiKCurrent = computePsiK(kCurrent);
+    psiReSpan.textContent = psiKCurrent.re.toFixed(3);
+    psiImSpan.textContent = psiKCurrent.im.toFixed(3);
+    
+    drawCanvasX();
+    drawCanvasK();
+  }
+  
+  // Update whenever a slider is moved
+  LSlider.addEventListener("input", update);
+  kSlider.addEventListener("input", update);
+  
+  // Initial drawing
+  update();
+</script>
+</body>
+</html>
