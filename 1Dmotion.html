@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 
 <!--
-Dr. S 1D Motion Simulation for Physics Education
+1D Motion Simulation for Physics Education
 -->
 
 <head>
 <meta charset="utf-8">
-<title>PHY1044: 1D Motion Exploration</title>
+<title>1D Motion Simulation</title>
 </head>
 
 <body style="background-color:#c0c0c0; font:15px sans-serif;">
 
 <div style="width:810px; margin-left:auto; margin-right:auto;">
-<h1 style="font-size:24px; text-align:center;">PHY1044: 1-D Motion Exploration</h1>
+<h1 style="font-size:24px; text-align:center;">1D Motion Simulation</h1>
 <canvas id="motionCanvas" width="800" height="300" style="border:1px solid black;"></canvas>
 
 <div style="margin-top:20px; text-align:center;">
@@ -47,7 +47,7 @@ Dr. S 1D Motion Simulation for Physics Education
 </div>
 
 <p>
-This simulation demonstrates one-dimensional motion. The ball moves along a horizontal axis, showing position, velocity, and acceleration.
+This simulation demonstrates one-dimensional motion. The ball moves along a horizontal axis, displaying the principles of position, velocity, and acceleration.
 </p>
 <p>
 Use the sliders to set the position, velocity, and acceleration of the ball. When the ball reaches the edge of the screen, it bounces back (briefly experiencing an acceleration during the bounce).
@@ -55,7 +55,6 @@ Use the sliders to set the position, velocity, and acceleration of the ball. Whe
 <p>
 The position slider allows you to manually position the ball, while the velocity and acceleration sliders let you set those values directly. After setting values, click Start to see the motion.
 </p>
-
 </div>
 
 <script>
@@ -133,19 +132,39 @@ function simulate() {
     // Check for bouncing against the edges:
     var bounds = 10; // boundaries at ±10 meters
     if (position > bounds) {
+        // Calculate the acceleration for the bounce
+        var oldVelocity = velocity;
         position = bounds;
         velocity = -Math.abs(velocity);
+        
+        // Calculate and display the acceleration (negative for right wall collision)
+        acceleration = (velocity - oldVelocity) / dt;
+        // Clamp acceleration display to slider range
+        acceleration = Math.max(-2, Math.min(2, acceleration));
+        accelerationSlider.value = acceleration;
+        
         bouncing = true;
         bounceTimer = 10; // frames of bounce effect
         velocitySlider.value = velocity; // Update velocity slider to match new velocity
         previousVelocity = velocity; // Update previous velocity after bounce
+        accelResetTimer = 30; // Set timer to reset acceleration display
     } else if (position < -bounds) {
+        // Calculate the acceleration for the bounce
+        var oldVelocity = velocity;
         position = -bounds;
         velocity = Math.abs(velocity);
+        
+        // Calculate and display the acceleration (positive for left wall collision)
+        acceleration = (velocity - oldVelocity) / dt;
+        // Clamp acceleration display to slider range
+        acceleration = Math.max(-2, Math.min(2, acceleration));
+        accelerationSlider.value = acceleration;
+        
         bouncing = true;
         bounceTimer = 10; // frames of bounce effect
         velocitySlider.value = velocity; // Update velocity slider to match new velocity
         previousVelocity = velocity; // Update previous velocity after bounce
+        accelResetTimer = 30; // Set timer to reset acceleration display
     }
     
     // Update bounce effect timer
