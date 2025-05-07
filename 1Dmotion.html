@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+
+<!--
+Dr. S 1D Motion Simulation for Physics Education
+-->
+
+<head>
+<meta charset="utf-8">
+<title>PHY1044: 1D Motion Exploration</title>
+</head>
+
+<body style="background-color:#c0c0c0; font:15px sans-serif;">
+
+<div style="width:810px; margin-left:auto; margin-right:auto;">
+<h1 style="font-size:24px; text-align:center;">PHY1044: 1-D Motion Exploration</h1>
+<canvas id="motionCanvas" width="800" height="300" style="border:1px solid black;"></canvas>
+
+<div style="margin-top:20px; text-align:center;">
+    <input id="startButton" type="button" value="Start" onclick="startStop();" style="width:100px; font-size:16px;">
+    <input id="resetButton" type="button" value="Reset" onclick="resetSimulation();" style="width:100px; font-size:16px; margin-left:20px;">
+</div>
+
+<div style="margin-top:20px;">
+    <div style="margin-bottom:10px; display:flex; align-items:center;">
+        <div style="width:150px; text-align:right; margin-right:10px;">
+            <strong>Position:</strong> <span id="positionReadout">0.00</span> m
+        </div>
+        <input id="positionSlider" type="range" min="-10" max="10" step="0.1" value="0" 
+               oninput="positionChange()" onchange="positionChange()" style="width:300px;">
+    </div>
+    
+    <div style="margin-bottom:10px; display:flex; align-items:center;">
+        <div style="width:150px; text-align:right; margin-right:10px;">
+            <strong>Velocity:</strong> <span id="velocityReadout">0.00</span> m/s
+        </div>
+        <input id="velocitySlider" type="range" min="-2" max="2" step="0.1" value="0" 
+               oninput="velocityChange()" onchange="velocityChange()" style="width:300px;">
+    </div>
+    
+    <div style="margin-bottom:10px; display:flex; align-items:center;">
+        <div style="width:150px; text-align:right; margin-right:10px;">
+            <strong>Acceleration:</strong> <span id="accelerationReadout">0.00</span> m/s²
+        </div>
+        <input id="accelerationSlider" type="range" min="-2" max="2" step="1" value="0" 
+               oninput="accelerationChange()" onchange="accelerationChange()" style="width:300px;">
+    </div>
+</div>
+
+<p>
+This simulation demonstrates one-dimensional motion. The ball moves along a horizontal axis, showing position, velocity, and acceleration.
+</p>
+<p>
+Use the sliders to set the position, velocity, and acceleration of the ball. When the ball reaches the edge of the screen, it bounces back (briefly experiencing an acceleration during the bounce).
+</p>
+<p>
+The position slider allows you to manually position the ball, while the velocity and acceleration sliders let you set those values directly. After setting values, click Start to see the motion.
+</p>
+
+</div>
+
+<script>
+// Global variables:
+var motionCanvas = document.getElementById("motionCanvas");
+var motionContext = motionCanvas.getContext("2d");
+var startButton = document.getElementById("startButton");
+var positionSlider = document.getElementById("positionSlider");
+var velocitySlider = document.getElementById("velocitySlider");
+var accelerationSlider = document.getElementById("accelerationSlider");
+var positionReadout = document.getElementById("positionReadout");
+var velocityReadout = document.getElementById("velocityReadout");
+var accelerationReadout = document.getElementById("accelerationReadout");
+
+// Physics variables:
+var position = 0;       // position in meters
+var velocity = 0;       // velocity in m/s
+var acceleration = 0;   // acceleration in m/s²
+var previousVelocity = 0; // for tracking velocity changes
+var t = 0;              // simulation time in seconds
+var running = false;    // whether simulation is running
+var ratio;              // scaling ratio for high-resolution displays
+var bouncing = false;   // whether ball is bouncing
+var bounceTimer = 0;    // timer for bounce effect
+var accelResetTimer = 0; // timer for acceleration reset after velocity changes
+
+window.onload = init; // initialize when ready!
+
+// Initialize the graphics:
+function init() {
+    // Handle high-resolution displays:
+    var devicePixelRatio = window.devicePixelRatio || 1;
+    var backingStoreRatio = motionContext.webkitBackingStorePixelRatio || 1;
+    ratio = devicePixelRatio / backingStoreRatio;
+    
+    if (devicePixelRatio != backingStoreRatio) {
+        var oldWidth = motionCanvas.width;
+        var oldHeight = motionCanvas.height;
+        motionCanvas.width = oldWidth * ratio;
+        motionCanvas.height = oldHeight * ratio;
+        motionCanvas.style.width = oldWidth + "px";
+        motionCanvas.style.height = oldHeight + "px";
+        motionContext.scale(ratio, ratio);
+    }
+    
+    // Initialize physics variables
+    position = 0;
+    velocity = 0;
+    previousVelocity = 0;
+    acceleration = 0;
+    accelResetTimer = 0;
+    
+    // Initialize sliders to match initial values:
+    positionSlider.value = position;
+    velocitySlider.value = velocity;
+    accelerationSlider.value = acceleration;
+    
+    updateReadouts();
+    drawMotion();
+}
+
+// Function to execute a simulation step and schedule the next:
+function simulate() {
+    var dt = 0.05; // time step in seconds
+    
+    // Only apply actual acceleration from the acceleration slider, not from velocity changes
+    if (accelResetTimer <= 0) {
+        // Use the actual acceleration set by the acceleration slider for physics
+        velocity += acceleration * dt;
+    }
+    
+    position += velocity * dt;
+    previousVelocity = velocity; // Track velocity for change calculations
+    
+    // Check for bouncing against the edges:
+    var bounds = 10; // boundaries at ±10 meters
+    if (position > bounds) {
+        position = bounds;
+        velocity = -Math.abs(velocity);
+        bouncing = true;
+        bounceTimer = 10; // frames of bounce effect
+        velocitySlider.value = velocity; // Update velocity slider to match new velocity
+        previousVelocity = velocity; // Update previous velocity after bounce
+    } else if (position < -bounds) {
+        position = -bounds;
+        velocity = Math.abs(velocity);
+        bouncing = true;
+        bounceTimer = 10; // frames of bounce effect
+        velocitySlider.value = velocity; // Update velocity slider to match new velocity
+        previousVelocity = velocity; // Update previous velocity after bounce
+    }
+    
+    // Update bounce effect timer
+    if (bouncing) {
+        bounceTimer--;
+        if (bounceTimer <= 0) {
+            bouncing = false;
+        }
+    }
+    
+    // Handle acceleration display after velocity changes
+    if (accelResetTimer > 0) {
+        accelResetTimer--;
+        if (accelResetTimer <= 0) {
+            // Reset acceleration display to zero
+            acceleration = 0;
+            accelerationSlider.value = 0;
+        }
+    }
+    
+    t += dt;
+    updateReadouts();
+    drawMotion();
+    
+    if (running) {
+        window.setTimeout(simulate, 1000/60); // aim for 60 FPS
+    }
+}
+
+// Function to implement start/stop button click:
+function startStop() {
+    running = !running;
+    if (running) {
+        simulate();
+        startButton.value = "Pause";
+    } else {
+        startButton.value = "Resume";
+    }
+}
+
+// Reset the simulation to initial values:
+function resetSimulation() {
+    running = false;
+    startButton.value = "Start";
+    position = 0;
+    velocity = 0;
+    previousVelocity = 0;
+    acceleration = 0;
+    t = 0;
+    bouncing = false;
+    accelResetTimer = 0;
+    
+    // Reset sliders:
+    positionSlider.value = position;
+    velocitySlider.value = velocity;
+    accelerationSlider.value = acceleration;
+    
+    updateReadouts();
+    drawMotion();
+}
+
+// Functions to update values when sliders change:
+function positionChange() {
+    position = parseFloat(positionSlider.value);
+    updateReadouts();
+    drawMotion();
+}
+
+function velocityChange() {
+    // Calculate implied acceleration based on velocity change
+    var newVelocity = parseFloat(velocitySlider.value);
+    var velocityDelta = newVelocity - previousVelocity;
+    
+    // Show acceleration (assuming change happens over 0.1 seconds)
+    // This is purely for visualization - doesn't affect motion
+    acceleration = velocityDelta / 0.1;
+    
+    // Clamp acceleration to slider range for display
+    acceleration = Math.max(-2, Math.min(2, acceleration));
+    
+    // Set velocity to new value
+    velocity = newVelocity;
+    previousVelocity = newVelocity;
+    
+    // Update acceleration slider for visual feedback only
+    accelerationSlider.value = acceleration;
+    
+    // Set timer to gradually reset acceleration display to zero
+    accelResetTimer = 30; // frames until acceleration display resets
+    
+    updateReadouts();
+    drawMotion();
+}
+
+function accelerationChange() {
+    acceleration = parseFloat(accelerationSlider.value);
+    updateReadouts();
+    drawMotion();
+    
+    // When user manually sets acceleration, disable auto-reset
+    accelResetTimer = 0;
+}
+
+// Update all the numeric readouts:
+function updateReadouts() {
+    positionReadout.innerHTML = position.toFixed(2);
+    velocityReadout.innerHTML = velocity.toFixed(2);
+    accelerationReadout.innerHTML = acceleration.toFixed(2);
+    
+    // Also update sliders if they don't match (for when position changes during simulation):
+    if (Math.abs(position) <= 10) {
+        positionSlider.value = position;
+    }
+}
+
+// Draw the current state of the motion:
+function drawMotion() {
+    // Clear the canvas:
+    motionContext.fillStyle = "white";
+    motionContext.fillRect(0, 0, motionCanvas.width/ratio, motionCanvas.height/ratio);
+    
+    // Calculate the pixel position of the ball:
+    var canvasWidth = motionCanvas.width/ratio;
+    var canvasHeight = motionCanvas.height/ratio;
+    var pixelsPerMeter = canvasWidth / 20; // 20 meters total width (-10 to +10)
+    var ballX = canvasWidth/2 + position * pixelsPerMeter; // center + offset
+    var ballY = canvasHeight/2;
+    
+    // Draw the coordinate axis:
+    drawAxis();
+    
+    // Draw the ball:
+    motionContext.beginPath();
+    var ballRadius = 15;
+    motionContext.arc(ballX, ballY, ballRadius, 0, 2*Math.PI);
+    
+    // Use gradient fill similar to Schroeder's example:
+    var ballGradient;
+    if (bouncing) {
+        // Red gradient for bouncing
+        ballGradient = motionContext.createRadialGradient(ballX-2, ballY-4, 1, ballX-1, ballY-2, ballRadius+2);
+        ballGradient.addColorStop(0, "#ffb0b0");
+        ballGradient.addColorStop(1, "#ff0000");
+    } else {
+        // Blue gradient for normal motion
+        ballGradient = motionContext.createRadialGradient(ballX-2, ballY-4, 1, ballX-1, ballY-2, ballRadius+2);
+        ballGradient.addColorStop(0, "#b0c0ff");
+        ballGradient.addColorStop(1, "#0040ff");
+    }
+    
+    motionContext.fillStyle = ballGradient;
+    motionContext.fill();
+    motionContext.strokeStyle = "black";
+    motionContext.lineWidth = 0.5;
+    motionContext.stroke();
+    
+    // Draw velocity vector:
+    if (velocity != 0) {
+        var arrowLength = Math.min(Math.abs(velocity) * 20, 80); // Scale velocity for arrow length
+        drawArrow(ballX, ballY, ballX + Math.sign(velocity) * arrowLength, ballY, "green", 2);
+    }
+    
+    // Draw acceleration vector:
+    if (acceleration != 0) {
+        var accArrowLength = Math.min(Math.abs(acceleration) * 15, 60); // Scale acceleration for arrow length
+        drawArrow(ballX, ballY-25, ballX + Math.sign(acceleration) * accArrowLength, ballY-25, "red", 2);
+    }
+}
+
+// Draw the coordinate axis:
+function drawAxis() {
+    var canvasWidth = motionCanvas.width/ratio;
+    var canvasHeight = motionCanvas.height/ratio;
+    var pixelsPerMeter = canvasWidth / 20; // 20 meters total width (-10 to +10)
+    
+    // Draw the x-axis:
+    motionContext.beginPath();
+    motionContext.moveTo(0, canvasHeight/2);
+    motionContext.lineTo(canvasWidth, canvasHeight/2);
+    motionContext.strokeStyle = "black";
+    motionContext.lineWidth = 1;
+    motionContext.stroke();
+    
+    // Draw tick marks and labels:
+    motionContext.font = "12px sans-serif";
+    motionContext.fillStyle = "black";
+    motionContext.textAlign = "center";
+    motionContext.textBaseline = "top";
+    
+    for (var x = -10; x <= 10; x += 1) {
+        var tickX = canvasWidth/2 + x * pixelsPerMeter;
+        
+        // Draw tick mark:
+        motionContext.beginPath();
+        motionContext.moveTo(tickX, canvasHeight/2 - 5);
+        motionContext.lineTo(tickX, canvasHeight/2 + 5);
+        motionContext.stroke();
+        
+        // Draw label every 2 meters:
+        if (x % 2 == 0) {
+            motionContext.fillText(x + "m", tickX, canvasHeight/2 + 10);
+        }
+    }
+    
+    // Draw the origin marker:
+    motionContext.beginPath();
+    motionContext.arc(canvasWidth/2, canvasHeight/2, 3, 0, 2*Math.PI);
+    motionContext.fillStyle = "black";
+    motionContext.fill();
+}
+
+// Function to draw an arrow:
+function drawArrow(fromX, fromY, toX, toY, color, lineWidth) {
+    var headLength = 10;
+    var headAngle = Math.PI / 6;
+    
+    var angle = Math.atan2(toY - fromY, toX - fromX);
+    
+    // Draw the line:
+    motionContext.beginPath();
+    motionContext.moveTo(fromX, fromY);
+    motionContext.lineTo(toX, toY);
+    motionContext.strokeStyle = color;
+    motionContext.lineWidth = lineWidth;
+    motionContext.stroke();
+    
+    // Draw the arrowhead:
+    motionContext.beginPath();
+    motionContext.moveTo(toX, toY);
+    motionContext.lineTo(
+        toX - headLength * Math.cos(angle - headAngle),
+        toY - headLength * Math.sin(angle - headAngle)
+    );
+    motionContext.lineTo(
+        toX - headLength * Math.cos(angle + headAngle),
+        toY - headLength * Math.sin(angle + headAngle)
+    );
+    motionContext.lineTo(toX, toY);
+    motionContext.fillStyle = color;
+    motionContext.fill();
+}
+</script>
+
+</body>
+
+</html>
