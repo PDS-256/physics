@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tone Generator</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 { margin-top: 0; color: #333; }
+        label { font-weight: 500; color: #555; }
+        input {
+            width: 100%;
+            padding: 12px;
+            font-size: 18px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            margin: 8px 0 20px 0;
+            box-sizing: border-box;
+        }
+        input:focus { outline: none; border-color: #4a90d9; }
+        button {
+            background: #4a90d9;
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        button:hover { background: #357abd; }
+        canvas {
+            width: 100%;
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .info {
+            color: #666;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        #title {
+            text-align: center;
+            color: #333;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Tone Generator</h1>
+        <label for="freqs">Enter frequencies (Hz), separated by commas:</label>
+        <input type="text" id="freqs" placeholder="440, 660" value="440">
+        <button onclick="playTone()">Play Tone</button>
+        <p class="info">Examples: "440" for single tone, "440, 554, 660" for a chord</p>
+        <h3 id="title"></h3>
+        <canvas id="waveform" height="300"></canvas>
+    </div>
+
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playTone() {
+            const input = document.getElementById('freqs').value;
+            const freqs = input.split(',').map(s => parseFloat(s.trim())).filter(f => f > 0);
+            
+            if (freqs.length === 0) {
+                alert('Please enter at least one frequency');
+                return;
+            }
+
+            // Audio parameters
+            const sampleRate = audioCtx.sampleRate;
+            const duration = 1.0;
+            const numSamples = Math.floor(sampleRate * duration);
+            
+            // Create audio buffer
+            const buffer = audioCtx.createBuffer(1, numSamples, sampleRate);
+            const data = buffer.getChannelData(0);
+            
+            // Generate waveform (same logic as Python)
+            const amplitude = 0.5 / freqs.length;
+            for (let i = 0; i < numSamples; i++) {
+                const t = i / sampleRate;
+                data[i] = 0;
+                for (const freq of freqs) {
+                    data[i] += amplitude * Math.sin(2 * Math.PI * freq * t);
+                }
+            }
+            
+            // Play sound
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioCtx.destination);
+            source.start();
+            
+            // Plot waveform
+            plotWaveform(freqs, sampleRate);
+        }
+
+        function plotWaveform(freqs, sampleRate) {
+            const canvas = document.getElementById('waveform');
+            const ctx = canvas.getContext('2d');
+            
+            // Set actual canvas resolution
+            canvas.width = canvas.offsetWidth * 2;
+            canvas.height = 300 * 2;
+            ctx.scale(2, 2);
+            
+            const width = canvas.offsetWidth;
+            const height = 300;
+            const padding = 40;
+            
+            // Clear canvas
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Time window (10 ms)
+            const xlimitMs = 10;
+            const numPoints = Math.floor(sampleRate * xlimitMs / 1000);
+            const amplitude = 0.5 / freqs.length;
+            
+            // Generate data points
+            const components = freqs.map(freq => {
+                const points = [];
+                for (let i = 0; i < numPoints; i++) {
+                    const t = i / sampleRate;
+                    points.push(amplitude * Math.sin(2 * Math.PI * freq * t));
+                }
+                return points;
+            });
+            
+            const combined = [];
+            for (let i = 0; i < numPoints; i++) {
+                let sum = 0;
+                for (const comp of components) sum += comp[i];
+                combined.push(sum);
+            }
+            
+            // Scaling
+            const xScale = (width - 2 * padding) / numPoints;
+            const yScale = (height - 2 * padding) / 1.2;
+            const yMid = height / 2;
+            
+            // Draw grid
+            ctx.strokeStyle = '#eee';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 10; i++) {
+                const x = padding + i * (width - 2 * padding) / 10;
+                ctx.beginPath();
+                ctx.moveTo(x, padding);
+                ctx.lineTo(x, height - padding);
+                ctx.stroke();
+            }
+            
+            // Draw components in light gray
+            ctx.strokeStyle = 'lightgray';
+            ctx.lineWidth = 1.5;
+            for (const comp of components) {
+                ctx.beginPath();
+                for (let i = 0; i < numPoints; i++) {
+                    const x = padding + i * xScale;
+                    const y = yMid - comp[i] * yScale;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+            
+            // Draw combined in blue
+            ctx.strokeStyle = '#4a90d9';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (let i = 0; i < numPoints; i++) {
+                const x = padding + i * xScale;
+                const y = yMid - combined[i] * yScale;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            
+            // Draw axes
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, height - padding);
+            ctx.lineTo(width - padding, height - padding);
+            ctx.stroke();
+            
+            // Labels
+            ctx.fillStyle = '#333';
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Time (ms)', width / 2, height - 10);
+            ctx.fillText('0', padding, height - padding + 15);
+            ctx.fillText(xlimitMs, width - padding, height - padding + 15);
+            
+            ctx.save();
+            ctx.translate(15, height / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText('Amplitude', 0, 0);
+            ctx.restore();
+            
+            // Update title
+            const label = freqs.map(f => f + ' Hz').join(', ');
+            document.getElementById('title').textContent = 'Frequencies: ' + label;
+        }
+
+        // Handle Enter key
+        document.getElementById('freqs').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') playTone();
+        });
+    </script>
+</body>
+</html>
