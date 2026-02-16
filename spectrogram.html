@@ -193,6 +193,31 @@
     }
     .marker-delete:hover { color: #ef4444; }
 
+    /* Drag handle on left side of marker line */
+    .marker-drag-handle {
+      position: absolute;
+      left: 4px;
+      top: -12px;
+      width: 22px;
+      height: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: ns-resize;
+      pointer-events: auto;
+      color: rgba(255,255,255,0.8);
+      font-size: 0.65rem;
+      line-height: 0.6;
+      user-select: none;
+      background: rgba(0,0,0,0.55);
+      border-radius: 3px;
+    }
+    .marker-drag-handle:hover {
+      color: #fff;
+      background: rgba(59,130,246,0.6);
+    }
+
     /* Frequency axis labels (left side overlay) */
     .freq-axis {
       position: absolute;
@@ -253,6 +278,12 @@
     </div>
 
     <div class="control-group">
+      <label>Sensitivity:</label>
+      <input type="range" id="sensitivity" min="0" max="100" value="50"
+             style="width:90px; accent-color:#3b82f6; cursor:pointer;">
+    </div>
+
+    <div class="control-group">
       <label>Range:</label>
       <div class="freq-range-group">
         <input type="radio" name="frange" id="fr1000" value="1000">
@@ -278,7 +309,7 @@
     <canvas id="legendBar" class="legend-bar" width="120" height="10"></canvas>
     <span>Loud</span>
   </div>
-  <p class="hint">Click on the spectrogram to place a frequency marker line. Drag to reposition.</p>
+  <p class="hint">Click on the spectrogram to place a frequency marker line. Use the arrow handle on the left to drag and reposition.</p>
 
 <script>
 (function () {
@@ -484,8 +515,9 @@
     analyser  = audioCtx.createAnalyser();
     analyser.fftSize = FFT_SIZE;
     analyser.smoothingTimeConstant = 0.6;
-    analyser.minDecibels = -90;
-    analyser.maxDecibels = -10;
+    const sensVal = parseInt(sensitivitySlider.value, 10);
+    analyser.minDecibels = -120 + sensVal * 0.7;
+    analyser.maxDecibels = -20 + sensVal * 0.1;
 
     const source = audioCtx.createMediaStreamSource(micStream);
     source.connect(analyser);
@@ -509,6 +541,9 @@
   function clearSpectrogram() {
     offCtx.clearRect(0, 0, WIDTH, HEIGHT);
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
+    // Also remove all marker lines
+    for (const m of markers) m.el.remove();
+    markers = [];
   }
 
   btnStart.addEventListener('click', startMic);
@@ -519,19 +554,30 @@
   toggleLog.addEventListener('click', () => {
     logScale = !logScale;
     toggleLog.classList.toggle('active', logScale);
+    clearSpectrogram();
     updateFreqAxis();
-    repositionMarkers();
   });
   toggleLog.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleLog.click(); }
+  });
+
+  // ── Sensitivity slider ──
+  const sensitivitySlider = document.getElementById('sensitivity');
+  sensitivitySlider.addEventListener('input', () => {
+    if (!analyser) return;
+    // Map 0-100 → minDecibels from -120 (low sens) to -50 (high sens)
+    // and maxDecibels from -10 (fixed)
+    const val = parseInt(sensitivitySlider.value, 10);
+    analyser.minDecibels = -120 + val * 0.7;   // range: -120 to -50
+    analyser.maxDecibels = -20 + val * 0.1;     // range: -20 to -10
   });
 
   // ── Frequency range radio ──
   document.querySelectorAll('input[name="frange"]').forEach(radio => {
     radio.addEventListener('change', () => {
       maxFreq = parseInt(radio.value, 10);
+      clearSpectrogram();
       updateFreqAxis();
-      repositionMarkers();
     });
   });
 
@@ -544,6 +590,13 @@
     lineEl.className = 'marker-line';
     lineEl.style.top = y + 'px';
 
+    // Drag handle on left side with up/down arrows
+    const handleEl = document.createElement('div');
+    handleEl.className = 'marker-drag-handle';
+    handleEl.innerHTML = '&#9650;<br>&#9660;';
+    handleEl.title = 'Drag to reposition';
+    lineEl.appendChild(handleEl);
+
     const labelEl = document.createElement('div');
     labelEl.className = 'marker-label';
     labelEl.innerHTML = `<span class="marker-freq-text">${formatFreq(freq)}</span><span class="marker-delete" title="Remove marker">&times;</span>`;
@@ -551,7 +604,7 @@
 
     wrapper.appendChild(lineEl);
 
-    const marker = { id, freq, el: lineEl, labelEl };
+    const marker = { id, freq, el: lineEl, labelEl, handleEl };
     markers.push(marker);
 
     // Delete handler
@@ -560,7 +613,7 @@
       removeMarker(id);
     });
 
-    // Drag handler
+    // Drag handler — works from both label and left handle
     makeDraggable(marker);
     return marker;
   }
@@ -587,10 +640,13 @@
 
   function makeDraggable(marker) {
     const labelEl = marker.labelEl;
+    const handleEl = marker.handleEl;
     let dragging = false;
 
     labelEl.addEventListener('mousedown', onStart);
     labelEl.addEventListener('touchstart', onStart, { passive: false });
+    handleEl.addEventListener('mousedown', onStart);
+    handleEl.addEventListener('touchstart', onStart, { passive: false });
 
     function onStart(e) {
       // Ignore clicks on delete button
