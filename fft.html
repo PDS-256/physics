@@ -81,6 +81,12 @@
     }
     .btn-pause:hover { background: #d97706; }
 
+    .btn-clear {
+      background: #374151;
+      color: #e0e0e0;
+    }
+    .btn-clear:hover { background: #4b5563; }
+
     /* Toggle switch */
     .toggle-wrapper {
       display: flex;
@@ -163,7 +169,6 @@
     }
     .marker-label {
       position: absolute;
-      top: 8px;
       left: 8px;
       background: rgba(0, 0, 0, 0.75);
       color: #fff;
@@ -230,10 +235,16 @@
   <div class="controls">
     <button id="btnStart" class="btn btn-start">Start Microphone</button>
     <button id="btnPause" class="btn btn-pause" disabled>Pause</button>
+    <button id="btnClear" class="btn btn-clear">Clear Lines</button>
 
     <div class="toggle-wrapper">
       <label style="font-size:0.8rem;color:#aaa;">Log scale</label>
       <div id="toggleLog" class="toggle" role="button" tabindex="0" aria-label="Toggle log scale"></div>
+    </div>
+
+    <div class="toggle-wrapper">
+      <label style="font-size:0.8rem;color:#aaa;">Slow decay</label>
+      <div id="toggleDecay" class="toggle" role="button" tabindex="0" aria-label="Toggle slow decay"></div>
     </div>
 
     <div class="control-group">
@@ -287,7 +298,9 @@
   const wrapper     = document.getElementById('canvasWrapper');
   const btnStart    = document.getElementById('btnStart');
   const btnPause    = document.getElementById('btnPause');
+  const btnClear    = document.getElementById('btnClear');
   const toggleLog   = document.getElementById('toggleLog');
+  const toggleDecay = document.getElementById('toggleDecay');
   const sensitivitySlider = document.getElementById('sensitivity');
 
   // ── Constants ──
@@ -313,6 +326,8 @@
   let maxFreq   = 4000;
   let animId    = null;
   let frozenData = null;   // snapshot when paused
+  let slowDecay  = false;
+  let decayData  = null;   // peak-hold envelope for slow decay
 
   // Marker lines: { id, freq, el }
   let markers = [];
@@ -487,7 +502,18 @@
   function animLoop() {
     if (!running || paused) return;
     analyser.getByteFrequencyData(dataArray);
-    drawFrame(dataArray);
+
+    if (slowDecay) {
+      if (!decayData) decayData = new Float32Array(dataArray.length);
+      const decayRate = 0.97;  // how slowly peaks fall
+      for (let i = 0; i < dataArray.length; i++) {
+        decayData[i] = Math.max(dataArray[i], decayData[i] * decayRate);
+      }
+      drawFrame(decayData);
+    } else {
+      drawFrame(dataArray);
+    }
+
     animId = requestAnimationFrame(animLoop);
   }
 
@@ -554,6 +580,19 @@
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleLog.click(); }
   });
 
+  // ── Clear markers button ──
+  btnClear.addEventListener('click', removeAllMarkers);
+
+  // ── Slow decay toggle ──
+  toggleDecay.addEventListener('click', () => {
+    slowDecay = !slowDecay;
+    toggleDecay.classList.toggle('active', slowDecay);
+    if (!slowDecay) decayData = null;
+  });
+  toggleDecay.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDecay.click(); }
+  });
+
   // ── Sensitivity slider ──
   sensitivitySlider.addEventListener('input', () => {
     if (!analyser) return;
@@ -583,6 +622,32 @@
     });
   });
 
+  // ── Stagger marker labels to avoid overlap ──
+  const LABEL_STAGGER_OFFSETS = [8, 30, 52, 74, 96];
+
+  function staggerLabels() {
+    // Sort markers by x-position and assign stagger levels
+    const sorted = markers.slice().sort((a, b) => freqToX(a.freq) - freqToX(b.freq));
+    const assigned = [];  // { xLeft, xRight, level }
+
+    for (const m of sorted) {
+      const x = freqToX(m.freq);
+      // Estimate label width ~90px in canvas coords
+      const labelW = 90;
+      let level = 0;
+      // Find the lowest level that doesn't collide
+      for (level = 0; level < LABEL_STAGGER_OFFSETS.length; level++) {
+        const collides = assigned.some(a =>
+          a.level === level && Math.abs(x - a.x) < labelW
+        );
+        if (!collides) break;
+      }
+      if (level >= LABEL_STAGGER_OFFSETS.length) level = LABEL_STAGGER_OFFSETS.length - 1;
+      assigned.push({ x, level });
+      m.labelEl.style.top = LABEL_STAGGER_OFFSETS[level] + 'px';
+    }
+  }
+
   // ── Marker lines (vertical) ──
   function addMarker(freq) {
     const id = nextMarkerId++;
@@ -601,6 +666,7 @@
 
     const labelEl = document.createElement('div');
     labelEl.className = 'marker-label';
+    labelEl.style.top = '8px';
     labelEl.innerHTML = `<span class="marker-freq-text">${formatFreq(freq)}</span><span class="marker-delete" title="Remove marker">&times;</span>`;
     lineEl.appendChild(labelEl);
 
@@ -617,6 +683,7 @@
 
     // Drag handler
     makeDraggable(marker);
+    staggerLabels();
     return marker;
   }
 
@@ -625,6 +692,7 @@
     if (idx === -1) return;
     markers[idx].el.remove();
     markers.splice(idx, 1);
+    staggerLabels();
   }
 
   function removeAllMarkers() {
@@ -638,6 +706,7 @@
       m.el.style.left = x + 'px';
       m.el.querySelector('.marker-freq-text').textContent = formatFreq(m.freq);
     }
+    staggerLabels();
   }
 
   function formatFreq(f) {
@@ -678,6 +747,7 @@
       marker.freq = xToFreq(x);
       marker.el.style.left = x + 'px';
       marker.el.querySelector('.marker-freq-text').textContent = formatFreq(marker.freq);
+      staggerLabels();
     }
 
     function onEnd() {
