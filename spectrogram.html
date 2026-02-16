@@ -141,6 +141,66 @@
       color: #fff;
     }
 
+    /* ── Zoom controls ── */
+    .zoom-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: center;
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 10px;
+      padding: 10px 20px;
+      margin-bottom: 16px;
+      max-width: 960px;
+      width: 100%;
+    }
+    .zoom-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .zoom-group label {
+      font-size: 0.78rem;
+      color: #888;
+      white-space: nowrap;
+    }
+    .zoom-input {
+      width: 62px;
+      background: #0f1117;
+      border: 1px solid #374151;
+      border-radius: 5px;
+      color: #f0f0f0;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 4px 6px;
+      text-align: center;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    .zoom-input:focus { outline: none; border-color: #3b82f6; }
+    .zoom-unit {
+      font-size: 0.72rem;
+      color: #555;
+    }
+    .zoom-slider {
+      width: 160px;
+      accent-color: #3b82f6;
+      cursor: pointer;
+    }
+    .zoom-reset {
+      border: none;
+      border-radius: 5px;
+      padding: 5px 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: #374151;
+      color: #ccc;
+      transition: background 0.15s;
+    }
+    .zoom-reset:hover { background: #4b5563; }
+
     /* ── Spectrogram canvas area ── */
     .canvas-wrapper {
       position: relative;
@@ -298,6 +358,23 @@
     </div>
   </div>
 
+  <!-- Frequency zoom -->
+  <div class="zoom-bar">
+    <div class="zoom-group">
+      <label>Min:</label>
+      <input type="number" class="zoom-input" id="zoomMinInput" value="0" min="0" max="19999" step="10">
+      <span class="zoom-unit">Hz</span>
+      <input type="range" class="zoom-slider" id="zoomMinSlider" min="0" max="19999" value="0" step="1">
+    </div>
+    <div class="zoom-group">
+      <label>Max:</label>
+      <input type="number" class="zoom-input" id="zoomMaxInput" value="4000" min="1" max="20000" step="10">
+      <span class="zoom-unit">Hz</span>
+      <input type="range" class="zoom-slider" id="zoomMaxSlider" min="1" max="20000" value="4000" step="1">
+    </div>
+    <button class="zoom-reset" id="zoomReset">Reset Zoom</button>
+  </div>
+
   <!-- Canvas -->
   <div class="canvas-wrapper" id="canvasWrapper">
     <canvas id="spectrogram"></canvas>
@@ -325,12 +402,20 @@
   const btnClear    = document.getElementById('btnClear');
   const toggleLog   = document.getElementById('toggleLog');
 
+  // ── Zoom DOM refs ──
+  const zoomMinInput  = document.getElementById('zoomMinInput');
+  const zoomMinSlider = document.getElementById('zoomMinSlider');
+  const zoomMaxInput  = document.getElementById('zoomMaxInput');
+  const zoomMaxSlider = document.getElementById('zoomMaxSlider');
+  const zoomResetBtn  = document.getElementById('zoomReset');
+
   // ── State ──
   const FFT_SIZE = 4096;
   let audioCtx, analyser, micStream, dataArray;
   let running   = false;
   let paused    = false;
   let logScale  = false;
+  let minFreq   = 0;
   let maxFreq   = 4000;
   let animId    = null;
 
@@ -384,25 +469,23 @@
   // ── Frequency ↔ Y mapping ──
   function freqToY(freq) {
     if (logScale) {
-      const minF = 20;
-      const logMin = Math.log10(minF);
+      const logMin = Math.log10(Math.max(1, minFreq || 20));
       const logMax = Math.log10(maxFreq);
-      const logF   = Math.log10(Math.max(minF, freq));
+      const logF   = Math.log10(Math.max(logMin, freq));
       const ratio  = (logF - logMin) / (logMax - logMin);
       return HEIGHT - ratio * HEIGHT;
     }
-    return HEIGHT - (freq / maxFreq) * HEIGHT;
+    return HEIGHT - ((freq - minFreq) / (maxFreq - minFreq)) * HEIGHT;
   }
 
   function yToFreq(y) {
     if (logScale) {
-      const minF = 20;
-      const logMin = Math.log10(minF);
+      const logMin = Math.log10(Math.max(1, minFreq || 20));
       const logMax = Math.log10(maxFreq);
       const ratio  = (HEIGHT - y) / HEIGHT;
       return Math.pow(10, logMin + ratio * (logMax - logMin));
     }
-    return ((HEIGHT - y) / HEIGHT) * maxFreq;
+    return minFreq + ((HEIGHT - y) / HEIGHT) * (maxFreq - minFreq);
   }
 
   // ── Frequency axis ticks ──
@@ -410,13 +493,16 @@
     freqAxisEl.innerHTML = '';
     let ticks;
     if (logScale) {
-      // Log ticks
-      ticks = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000].filter(f => f <= maxFreq && f >= 20);
+      const logMinF = Math.max(1, minFreq || 20);
+      ticks = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000].filter(f => f <= maxFreq && f >= logMinF);
     } else {
-      // Linear ticks — roughly 8 ticks
-      const step = niceStep(maxFreq, 8);
+      const range = maxFreq - minFreq;
+      const step = niceStep(range, 8);
+      const first = Math.ceil(minFreq / step) * step;
       ticks = [];
-      for (let f = step; f <= maxFreq; f += step) ticks.push(f);
+      for (let f = first; f <= maxFreq; f += step) {
+        if (f > minFreq) ticks.push(f);
+      }
     }
     for (const f of ticks) {
       const y = freqToY(f);
@@ -576,10 +662,56 @@
   document.querySelectorAll('input[name="frange"]').forEach(radio => {
     radio.addEventListener('change', () => {
       maxFreq = parseInt(radio.value, 10);
+      minFreq = 0;
+      syncZoomControls();
       clearSpectrogram();
       updateFreqAxis();
     });
   });
+
+  // ── Zoom controls ──
+  function syncZoomControls() {
+    zoomMinInput.value = Math.round(minFreq);
+    zoomMinSlider.value = Math.round(minFreq);
+    zoomMaxInput.value = Math.round(maxFreq);
+    zoomMaxSlider.value = Math.round(maxFreq);
+    // Update slider ranges so min can't exceed max and vice versa
+    zoomMinSlider.max = Math.max(1, maxFreq - 1);
+    zoomMaxSlider.min = Math.max(1, minFreq + 1);
+  }
+
+  function applyZoom(newMin, newMax) {
+    newMin = Math.max(0, Math.min(19999, newMin));
+    newMax = Math.max(1, Math.min(20000, newMax));
+    if (newMin >= newMax) return; // invalid
+    minFreq = newMin;
+    maxFreq = newMax;
+    syncZoomControls();
+    // Deselect any preset radio since we're in custom range
+    document.querySelectorAll('input[name="frange"]').forEach(r => r.checked = false);
+    clearSpectrogram();
+    updateFreqAxis();
+  }
+
+  zoomMinSlider.addEventListener('input', () => applyZoom(parseFloat(zoomMinSlider.value), maxFreq));
+  zoomMaxSlider.addEventListener('input', () => applyZoom(minFreq, parseFloat(zoomMaxSlider.value)));
+  zoomMinInput.addEventListener('change', () => applyZoom(parseFloat(zoomMinInput.value) || 0, maxFreq));
+  zoomMaxInput.addEventListener('change', () => applyZoom(minFreq, parseFloat(zoomMaxInput.value) || 4000));
+
+  zoomResetBtn.addEventListener('click', () => {
+    // Check which radio was last selected, default to 4kHz
+    const checked = document.querySelector('input[name="frange"]:checked');
+    const preset = checked ? parseInt(checked.value, 10) : 4000;
+    minFreq = 0;
+    maxFreq = preset;
+    if (!checked) document.getElementById('fr4000').checked = true;
+    syncZoomControls();
+    clearSpectrogram();
+    updateFreqAxis();
+  });
+
+  // Init zoom controls
+  syncZoomControls();
 
   // ── Marker lines ──
   function addMarker(freq) {
