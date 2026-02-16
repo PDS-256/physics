@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Beats &amp; Dual Tones — Physics of Sound</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0f1117;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 60px;
+    }
+
+    h1 { font-size: 1.6rem; font-weight: 600; margin-bottom: 4px; color: #f0f0f0; }
+    .subtitle { font-size: 0.85rem; color: #888; margin-bottom: 18px; }
+
+    /* ── Panels ── */
+    .panel {
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 10px;
+      padding: 16px 24px;
+      max-width: 960px;
+      width: 100%;
+      margin-bottom: 14px;
+    }
+
+    /* ── Tone controls row ── */
+    .tones-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .tone-card {
+      flex: 1;
+      min-width: 260px;
+      background: #14161e;
+      border: 1px solid #2a2d3a;
+      border-radius: 8px;
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .tone-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .tone-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .tone-title.tone-a { color: #3b82f6; }
+    .tone-title.tone-b { color: #f59e0b; }
+
+    .mute-btn {
+      background: none;
+      border: 1px solid #374151;
+      border-radius: 4px;
+      color: #aaa;
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .mute-btn:hover { background: #374151; }
+    .mute-btn.muted { background: #ef4444; border-color: #ef4444; color: #fff; }
+
+    .freq-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .freq-input {
+      width: 72px;
+      background: #0f1117;
+      border: 1px solid #374151;
+      border-radius: 6px;
+      color: #f0f0f0;
+      font-size: 1rem;
+      font-weight: 600;
+      padding: 5px 8px;
+      text-align: center;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    .freq-input:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+    .freq-unit {
+      font-size: 0.8rem;
+      color: #666;
+    }
+
+    .freq-slider {
+      flex: 1;
+      accent-color: #3b82f6;
+      cursor: pointer;
+      height: 6px;
+    }
+    .tone-b .freq-slider { accent-color: #f59e0b; }
+
+    .vol-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .vol-label {
+      font-size: 0.72rem;
+      color: #666;
+      width: 32px;
+    }
+    .vol-slider {
+      flex: 1;
+      accent-color: #6b7280;
+      cursor: pointer;
+      height: 4px;
+    }
+
+    /* ── Play controls ── */
+    .play-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 6px;
+      padding: 9px 22px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.96); }
+
+    .btn-play { background: #10b981; color: #fff; }
+    .btn-play:hover { background: #059669; }
+    .btn-play.playing { background: #ef4444; }
+    .btn-play.playing:hover { background: #dc2626; }
+
+    .beat-info {
+      font-size: 0.85rem;
+      color: #aaa;
+    }
+    .beat-info strong {
+      color: #f0f0f0;
+      font-weight: 600;
+    }
+    .beat-freq {
+      color: #a78bfa;
+      font-weight: 700;
+    }
+
+    /* ── Waveform display ── */
+    .wave-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .wave-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #aaa;
+    }
+
+    .pill-group {
+      display: flex;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #2a2d3a;
+    }
+    .pill-group input[type="radio"] { display: none; }
+    .pill-group label {
+      padding: 5px 10px;
+      font-size: 0.75rem;
+      color: #aaa;
+      background: #1a1d27;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      border-right: 1px solid #2a2d3a;
+      white-space: nowrap;
+    }
+    .pill-group label:last-of-type { border-right: none; }
+    .pill-group input[type="radio"]:checked + label {
+      background: #3b82f6;
+      color: #fff;
+    }
+
+    .canvas-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .wave-row {
+      position: relative;
+    }
+    .wave-label {
+      position: absolute;
+      top: 6px;
+      left: 8px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: rgba(0,0,0,0.6);
+      z-index: 2;
+    }
+    .wave-label-a { color: #3b82f6; }
+    .wave-label-b { color: #f59e0b; }
+    .wave-label-sum { color: #a78bfa; }
+
+    canvas {
+      display: block;
+      width: 100%;
+      background: #0a0c12;
+      border-radius: 6px;
+      border: 1px solid #1e2030;
+    }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      margin-top: 6px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.72rem;
+      color: #888;
+    }
+    .legend-swatch {
+      width: 14px;
+      height: 3px;
+      border-radius: 2px;
+    }
+
+    .hint {
+      font-size: 0.75rem;
+      color: #555;
+      margin-top: 10px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Beats &amp; Dual Tones</h1>
+  <p class="subtitle">Physics of Sound &mdash; Hear and see the beat frequency between two tones</p>
+
+  <!-- Tone controls -->
+  <div class="panel">
+    <div class="tones-row">
+      <div class="tone-card tone-a">
+        <div class="tone-header">
+          <span class="tone-title tone-a">Tone A</span>
+          <button class="mute-btn" id="muteA">Mute</button>
+        </div>
+        <div class="freq-row">
+          <input type="number" class="freq-input" id="freqInputA" value="440" min="20" max="2000" step="1">
+          <span class="freq-unit">Hz</span>
+          <input type="range" class="freq-slider" id="freqSliderA" min="20" max="2000" value="440" step="0.1">
+        </div>
+        <div class="vol-row">
+          <span class="vol-label">Vol</span>
+          <input type="range" class="vol-slider" id="volA" min="0" max="100" value="60">
+        </div>
+      </div>
+
+      <div class="tone-card tone-b">
+        <div class="tone-header">
+          <span class="tone-title tone-b">Tone B</span>
+          <button class="mute-btn" id="muteB">Mute</button>
+        </div>
+        <div class="freq-row">
+          <input type="number" class="freq-input" id="freqInputB" value="444" min="20" max="2000" step="1">
+          <span class="freq-unit">Hz</span>
+          <input type="range" class="freq-slider" id="freqSliderB" min="20" max="2000" value="444" step="0.1">
+        </div>
+        <div class="vol-row">
+          <span class="vol-label">Vol</span>
+          <input type="range" class="vol-slider" id="volB" min="0" max="100" value="60">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Play & beat info -->
+  <div class="panel">
+    <div class="play-row">
+      <button class="btn btn-play" id="btnPlay">Play</button>
+      <div class="beat-info">
+        Beat frequency: <span class="beat-freq" id="beatFreq">4.0 Hz</span>
+        &nbsp;&mdash;&nbsp; period: <strong id="beatPeriod">250 ms</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- Waveform display -->
+  <div class="panel">
+    <div class="wave-header">
+      <span class="wave-title">Waveform Preview</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:0.75rem;color:#666;">Window:</span>
+        <div class="pill-group">
+          <input type="radio" name="twindow" id="tw5" value="5">
+          <label for="tw5">5 ms</label>
+          <input type="radio" name="twindow" id="tw20" value="20" checked>
+          <label for="tw20">20 ms</label>
+          <input type="radio" name="twindow" id="tw100" value="100">
+          <label for="tw100">100 ms</label>
+          <input type="radio" name="twindow" id="tw500" value="500">
+          <label for="tw500">500 ms</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="canvas-stack">
+      <!-- Individual waves (small) -->
+      <div class="wave-row">
+        <span class="wave-label wave-label-a">Tone A</span>
+        <canvas id="canvasA" height="100"></canvas>
+      </div>
+      <div class="wave-row">
+        <span class="wave-label wave-label-b">Tone B</span>
+        <canvas id="canvasB" height="100"></canvas>
+      </div>
+      <!-- Combined (larger) -->
+      <div class="wave-row">
+        <span class="wave-label wave-label-sum">A + B (combined)</span>
+        <canvas id="canvasSum" height="160"></canvas>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-swatch" style="background:#3b82f6;"></div> Tone A</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#f59e0b;"></div> Tone B</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#a78bfa;"></div> Combined</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:rgba(167,139,250,0.25); height:8px;"></div> Envelope</div>
+    </div>
+  </div>
+
+  <p class="hint">Try frequencies close together (e.g. 440 &amp; 442 Hz) to see clear beats. Use 500 ms to see the full wobble.</p>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── DOM refs ──
+  const freqInputA  = document.getElementById('freqInputA');
+  const freqSliderA = document.getElementById('freqSliderA');
+  const freqInputB  = document.getElementById('freqInputB');
+  const freqSliderB = document.getElementById('freqSliderB');
+  const volA        = document.getElementById('volA');
+  const volB        = document.getElementById('volB');
+  const muteABtn    = document.getElementById('muteA');
+  const muteBBtn    = document.getElementById('muteB');
+  const btnPlay     = document.getElementById('btnPlay');
+  const beatFreqEl  = document.getElementById('beatFreq');
+  const beatPeriodEl = document.getElementById('beatPeriod');
+
+  const canvasA   = document.getElementById('canvasA');
+  const canvasB   = document.getElementById('canvasB');
+  const canvasSum = document.getElementById('canvasSum');
+  const ctxA   = canvasA.getContext('2d');
+  const ctxB   = canvasB.getContext('2d');
+  const ctxSum = canvasSum.getContext('2d');
+
+  // ── Canvas sizing ──
+  const CW = 960;
+  const CH_SMALL = 100;
+  const CH_BIG   = 160;
+  const PAD_L = 8;
+  const PAD_R = 8;
+  const PAD_T = 4;
+  const PAD_B = 18;
+
+  canvasA.width = CW;   canvasA.height = CH_SMALL;
+  canvasB.width = CW;   canvasB.height = CH_SMALL;
+  canvasSum.width = CW;  canvasSum.height = CH_BIG;
+
+  // ── State ──
+  let freqA = 440, freqB = 444;
+  let mutedA = false, mutedB = false;
+  let playing = false;
+  let timeWindow = 20; // ms
+
+  // Audio
+  let audioCtx, oscA, oscB, gainA, gainB, masterGain;
+
+  // ── Sync freq controls ──
+  function setFreqA(v) {
+    freqA = Math.max(20, Math.min(2000, parseFloat(v) || 20));
+    freqInputA.value = Math.round(freqA * 10) / 10;
+    freqSliderA.value = freqA;
+    if (oscA) oscA.frequency.setValueAtTime(freqA, audioCtx.currentTime);
+    updateBeatInfo();
+    drawAllWaves();
+  }
+  function setFreqB(v) {
+    freqB = Math.max(20, Math.min(2000, parseFloat(v) || 20));
+    freqInputB.value = Math.round(freqB * 10) / 10;
+    freqSliderB.value = freqB;
+    if (oscB) oscB.frequency.setValueAtTime(freqB, audioCtx.currentTime);
+    updateBeatInfo();
+    drawAllWaves();
+  }
+
+  freqSliderA.addEventListener('input', () => setFreqA(freqSliderA.value));
+  freqInputA.addEventListener('change', () => setFreqA(freqInputA.value));
+  freqInputA.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowUp')   { e.preventDefault(); setFreqA(freqA + 1); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setFreqA(freqA - 1); }
+  });
+
+  freqSliderB.addEventListener('input', () => setFreqB(freqSliderB.value));
+  freqInputB.addEventListener('change', () => setFreqB(freqInputB.value));
+  freqInputB.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowUp')   { e.preventDefault(); setFreqB(freqB + 1); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setFreqB(freqB - 1); }
+  });
+
+  // Volume
+  volA.addEventListener('input', () => {
+    if (gainA) gainA.gain.setValueAtTime(mutedA ? 0 : volA.value / 100, audioCtx.currentTime);
+    drawAllWaves();
+  });
+  volB.addEventListener('input', () => {
+    if (gainB) gainB.gain.setValueAtTime(mutedB ? 0 : volB.value / 100, audioCtx.currentTime);
+    drawAllWaves();
+  });
+
+  // Mute
+  muteABtn.addEventListener('click', () => {
+    mutedA = !mutedA;
+    muteABtn.classList.toggle('muted', mutedA);
+    muteABtn.textContent = mutedA ? 'Muted' : 'Mute';
+    if (gainA) gainA.gain.setValueAtTime(mutedA ? 0 : volA.value / 100, audioCtx.currentTime);
+    drawAllWaves();
+  });
+  muteBBtn.addEventListener('click', () => {
+    mutedB = !mutedB;
+    muteBBtn.classList.toggle('muted', mutedB);
+    muteBBtn.textContent = mutedB ? 'Muted' : 'Mute';
+    if (gainB) gainB.gain.setValueAtTime(mutedB ? 0 : volB.value / 100, audioCtx.currentTime);
+    drawAllWaves();
+  });
+
+  // Beat info
+  function updateBeatInfo() {
+    const bf = Math.abs(freqA - freqB);
+    beatFreqEl.textContent = bf.toFixed(1) + ' Hz';
+    if (bf > 0) {
+      const period = 1000 / bf;
+      beatPeriodEl.textContent = period >= 1 ? period.toFixed(1) + ' ms' : (period * 1000).toFixed(0) + ' \u00B5s';
+    } else {
+      beatPeriodEl.textContent = '\u221E';
+    }
+  }
+
+  // ── Play / Stop ──
+  btnPlay.addEventListener('click', () => {
+    if (playing) {
+      stopAudio();
+    } else {
+      startAudio();
+    }
+  });
+
+  function startAudio() {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.5;
+    masterGain.connect(audioCtx.destination);
+
+    gainA = audioCtx.createGain();
+    gainA.gain.value = mutedA ? 0 : volA.value / 100;
+    gainA.connect(masterGain);
+
+    gainB = audioCtx.createGain();
+    gainB.gain.value = mutedB ? 0 : volB.value / 100;
+    gainB.connect(masterGain);
+
+    oscA = audioCtx.createOscillator();
+    oscA.type = 'sine';
+    oscA.frequency.value = freqA;
+    oscA.connect(gainA);
+    oscA.start();
+
+    oscB = audioCtx.createOscillator();
+    oscB.type = 'sine';
+    oscB.frequency.value = freqB;
+    oscB.connect(gainB);
+    oscB.start();
+
+    playing = true;
+    btnPlay.textContent = 'Stop';
+    btnPlay.classList.add('playing');
+  }
+
+  function stopAudio() {
+    if (oscA) { oscA.stop(); oscA = null; }
+    if (oscB) { oscB.stop(); oscB = null; }
+    if (audioCtx) { audioCtx.close(); audioCtx = null; }
+    playing = false;
+    btnPlay.textContent = 'Play';
+    btnPlay.classList.remove('playing');
+  }
+
+  // ── Time window radio ──
+  document.querySelectorAll('input[name="twindow"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      timeWindow = parseFloat(radio.value);
+      drawAllWaves();
+    });
+  });
+
+  // ── Nice tick step ──
+  function niceStep(range, targetTicks) {
+    const rough = range / targetTicks;
+    const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+    const res = rough / mag;
+    if (res <= 1.5) return mag;
+    if (res <= 3.5) return 2 * mag;
+    if (res <= 7.5) return 5 * mag;
+    return 10 * mag;
+  }
+
+  // ── Draw waveform on a canvas ──
+  function drawWave(cvs, cctx, ch, data, color, fillColor, envelope) {
+    const plotW = CW - PAD_L - PAD_R;
+    const plotH = ch - PAD_T - PAD_B;
+    const midY  = PAD_T + plotH / 2;
+
+    cctx.clearRect(0, 0, CW, ch);
+    cctx.fillStyle = '#0a0c12';
+    cctx.fillRect(0, 0, CW, ch);
+
+    // Zero line
+    cctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    cctx.lineWidth = 1;
+    cctx.beginPath();
+    cctx.moveTo(PAD_L, midY);
+    cctx.lineTo(PAD_L + plotW, midY);
+    cctx.stroke();
+
+    // Time grid
+    const step = niceStep(timeWindow, 8);
+    cctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    for (let t = step; t < timeWindow; t += step) {
+      const x = PAD_L + (t / timeWindow) * plotW;
+      cctx.beginPath();
+      cctx.moveTo(x, PAD_T);
+      cctx.lineTo(x, PAD_T + plotH);
+      cctx.stroke();
+    }
+
+    // Envelope (if provided, drawn first so wave is on top)
+    if (envelope) {
+      cctx.beginPath();
+      for (let px = 0; px <= plotW; px++) {
+        const t = (px / plotW) * (timeWindow / 1000);
+        const envVal = envelope(t);
+        const y = midY - envVal * (plotH / 2);
+        if (px === 0) cctx.moveTo(PAD_L, y); else cctx.lineTo(PAD_L + px, y);
+      }
+      for (let px = plotW; px >= 0; px--) {
+        const t = (px / plotW) * (timeWindow / 1000);
+        const envVal = -envelope(t);
+        const y = midY - envVal * (plotH / 2);
+        cctx.lineTo(PAD_L + px, y);
+      }
+      cctx.closePath();
+      cctx.fillStyle = 'rgba(167,139,250,0.12)';
+      cctx.fill();
+
+      // Envelope lines
+      cctx.strokeStyle = 'rgba(167,139,250,0.35)';
+      cctx.lineWidth = 1;
+      cctx.setLineDash([4, 4]);
+      cctx.beginPath();
+      for (let px = 0; px <= plotW; px++) {
+        const t = (px / plotW) * (timeWindow / 1000);
+        const y = midY - envelope(t) * (plotH / 2);
+        if (px === 0) cctx.moveTo(PAD_L, y); else cctx.lineTo(PAD_L + px, y);
+      }
+      cctx.stroke();
+      cctx.beginPath();
+      for (let px = 0; px <= plotW; px++) {
+        const t = (px / plotW) * (timeWindow / 1000);
+        const y = midY + envelope(t) * (plotH / 2);
+        if (px === 0) cctx.moveTo(PAD_L, y); else cctx.lineTo(PAD_L + px, y);
+      }
+      cctx.stroke();
+      cctx.setLineDash([]);
+    }
+
+    // Waveform
+    cctx.beginPath();
+    for (let px = 0; px <= plotW; px++) {
+      const t = (px / plotW) * (timeWindow / 1000); // seconds
+      const val = data(t);
+      const y = midY - val * (plotH / 2);
+      if (px === 0) cctx.moveTo(PAD_L, y); else cctx.lineTo(PAD_L + px, y);
+    }
+    cctx.strokeStyle = color;
+    cctx.lineWidth = 1.5;
+    cctx.stroke();
+
+    // Fill under curve towards center
+    cctx.lineTo(PAD_L + plotW, midY);
+    cctx.lineTo(PAD_L, midY);
+    cctx.closePath();
+    cctx.fillStyle = fillColor;
+    cctx.fill();
+
+    // Time labels at bottom
+    cctx.fillStyle = 'rgba(255,255,255,0.35)';
+    cctx.font = '9px system-ui, sans-serif';
+    cctx.textAlign = 'center';
+    cctx.fillText('0', PAD_L, ch - 4);
+    for (let t = step; t < timeWindow; t += step) {
+      const x = PAD_L + (t / timeWindow) * plotW;
+      if (x > PAD_L + plotW - 20) continue;
+      const label = t >= 1 ? (t % 1 === 0 ? t + '' : t.toFixed(1)) : t.toFixed(2);
+      cctx.fillText(label, x, ch - 4);
+    }
+    cctx.fillStyle = 'rgba(255,255,255,0.2)';
+    cctx.fillText('ms', PAD_L + plotW, ch - 4);
+  }
+
+  // ── Draw all three canvases ──
+  function drawAllWaves() {
+    const ampA = mutedA ? 0 : volA.value / 100;
+    const ampB = mutedB ? 0 : volB.value / 100;
+
+    const waveA = (t) => ampA * Math.sin(2 * Math.PI * freqA * t);
+    const waveB = (t) => ampB * Math.sin(2 * Math.PI * freqB * t);
+    const waveSum = (t) => waveA(t) + waveB(t);
+
+    // Envelope for the combined wave: |cos(pi * df * t)| scaled by sum of amplitudes
+    const df = Math.abs(freqA - freqB);
+    const maxAmp = ampA + ampB;
+    const envFn = (df > 0 && ampA > 0 && ampB > 0)
+      ? (t) => maxAmp * Math.abs(Math.cos(Math.PI * df * t))
+      : null;
+
+    drawWave(canvasA, ctxA, CH_SMALL, waveA, '#3b82f6', 'rgba(59,130,246,0.08)', null);
+    drawWave(canvasB, ctxB, CH_SMALL, waveB, '#f59e0b', 'rgba(245,158,11,0.08)', null);
+    drawWave(canvasSum, ctxSum, CH_BIG, waveSum, '#a78bfa', 'rgba(167,139,250,0.06)', envFn);
+  }
+
+  // ── Initial draw ──
+  updateBeatInfo();
+  drawAllWaves();
+})();
+</script>
+
+</body>
+</html>
