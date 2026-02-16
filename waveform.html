@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Waveform — Physics of Sound</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0f1117;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #f0f0f0;
+    }
+    .subtitle {
+      font-size: 0.85rem;
+      color: #888;
+      margin-bottom: 18px;
+    }
+
+    /* ── Controls bar ── */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+      justify-content: center;
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 10px;
+      padding: 12px 20px;
+      margin-bottom: 16px;
+      max-width: 960px;
+      width: 100%;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .control-group label {
+      font-size: 0.8rem;
+      color: #aaa;
+      white-space: nowrap;
+    }
+
+    /* Buttons */
+    .btn {
+      border: none;
+      border-radius: 6px;
+      padding: 7px 16px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.96); }
+
+    .btn-start {
+      background: #3b82f6;
+      color: #fff;
+    }
+    .btn-start:hover { background: #2563eb; }
+
+    .btn-pause {
+      background: #f59e0b;
+      color: #1a1a1a;
+    }
+    .btn-pause:hover { background: #d97706; }
+
+    .btn-clear {
+      background: #374151;
+      color: #e0e0e0;
+    }
+    .btn-clear:hover { background: #4b5563; }
+
+    /* Toggle switch */
+    .toggle-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .toggle {
+      position: relative;
+      width: 38px;
+      height: 20px;
+      background: #374151;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle.active { background: #3b82f6; }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .toggle.active::after { transform: translateX(18px); }
+
+    /* Radio pills */
+    .pill-group {
+      display: flex;
+      gap: 0;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #2a2d3a;
+    }
+    .pill-group input[type="radio"] { display: none; }
+    .pill-group label {
+      padding: 5px 10px;
+      font-size: 0.75rem;
+      color: #aaa;
+      background: #1a1d27;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      border-right: 1px solid #2a2d3a;
+      white-space: nowrap;
+    }
+    .pill-group label:last-of-type { border-right: none; }
+    .pill-group input[type="radio"]:checked + label {
+      background: #3b82f6;
+      color: #fff;
+    }
+
+    /* ── Chart canvas area ── */
+    .canvas-wrapper {
+      position: relative;
+      max-width: 960px;
+      width: 100%;
+      background: #000;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #2a2d3a;
+      cursor: crosshair;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+    }
+
+    /* Time marker lines (vertical) */
+    .marker-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 0;
+      border-left: 2px dashed rgba(255, 255, 255, 0.85);
+      pointer-events: none;
+      z-index: 10;
+    }
+    .marker-label {
+      position: absolute;
+      left: 8px;
+      background: rgba(0, 0, 0, 0.75);
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .marker-delete {
+      cursor: pointer;
+      color: #f87171;
+      font-size: 0.85rem;
+      font-weight: 700;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    .marker-delete:hover { color: #ef4444; }
+
+    /* Drag handle at bottom of marker line */
+    .marker-drag-handle {
+      position: absolute;
+      bottom: 8px;
+      left: -11px;
+      width: 24px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: ew-resize;
+      pointer-events: auto;
+      color: rgba(255,255,255,0.8);
+      font-size: 0.65rem;
+      line-height: 1;
+      letter-spacing: -2px;
+      user-select: none;
+      background: rgba(0,0,0,0.55);
+      border-radius: 3px;
+    }
+    .marker-drag-handle:hover {
+      color: #fff;
+      background: rgba(59,130,246,0.6);
+    }
+
+    /* Instruction hint */
+    .hint {
+      font-size: 0.75rem;
+      color: #666;
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    /* Sync indicator */
+    .sync-indicator {
+      font-size: 0.7rem;
+      color: #666;
+      margin-left: 2px;
+      transition: color 0.2s;
+    }
+    .sync-indicator.locked {
+      color: #34d399;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Live Waveform</h1>
+  <p class="subtitle">Physics of Sound &mdash; Real-time oscilloscope view from your microphone</p>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button id="btnStart" class="btn btn-start">Start Microphone</button>
+    <button id="btnPause" class="btn btn-pause" disabled>Pause</button>
+    <button id="btnClear" class="btn btn-clear">Clear Lines</button>
+
+    <div class="toggle-wrapper">
+      <label style="font-size:0.8rem;color:#aaa;">Sync</label>
+      <div id="toggleSync" class="toggle active" role="button" tabindex="0" aria-label="Toggle trigger sync"></div>
+      <span id="syncIndicator" class="sync-indicator"></span>
+    </div>
+
+    <div class="control-group">
+      <label>Gain:</label>
+      <input type="range" id="gain" min="1" max="20" value="5"
+             style="width:80px; accent-color:#3b82f6; cursor:pointer;">
+    </div>
+
+    <div class="control-group">
+      <label>Window:</label>
+      <div class="pill-group">
+        <input type="radio" name="twindow" id="tw500" value="500">
+        <label for="tw500">500 ms</label>
+        <input type="radio" name="twindow" id="tw100" value="100">
+        <label for="tw100">100 ms</label>
+        <input type="radio" name="twindow" id="tw10" value="10" checked>
+        <label for="tw10">10 ms</label>
+        <input type="radio" name="twindow" id="tw5" value="5">
+        <label for="tw5">5 ms</label>
+        <input type="radio" name="twindow" id="tw1" value="1">
+        <label for="tw1">1 ms</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Canvas -->
+  <div class="canvas-wrapper" id="canvasWrapper">
+    <canvas id="waveCanvas"></canvas>
+  </div>
+
+  <p class="hint">Click on the chart to place a time marker line. Use the arrow handle at the bottom to drag and reposition.</p>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── DOM refs ──
+  const canvas        = document.getElementById('waveCanvas');
+  const ctx           = canvas.getContext('2d');
+  const wrapper       = document.getElementById('canvasWrapper');
+  const btnStart      = document.getElementById('btnStart');
+  const btnPause      = document.getElementById('btnPause');
+  const btnClear      = document.getElementById('btnClear');
+  const toggleSync    = document.getElementById('toggleSync');
+  const syncIndicator = document.getElementById('syncIndicator');
+  const gainSlider    = document.getElementById('gain');
+
+  // ── Constants ──
+  const WIDTH  = 960;
+  const HEIGHT = 400;
+  const PAD_LEFT   = 52;
+  const PAD_RIGHT  = 16;
+  const PAD_TOP    = 16;
+  const PAD_BOTTOM = 36;
+  const PLOT_W = WIDTH - PAD_LEFT - PAD_RIGHT;
+  const PLOT_H = HEIGHT - PAD_TOP - PAD_BOTTOM;
+  const MID_Y  = PAD_TOP + PLOT_H / 2;
+
+  canvas.width  = WIDTH;
+  canvas.height = HEIGHT;
+
+  // ── State ──
+  let audioCtx, analyser, micStream;
+  let running    = false;
+  let paused     = false;
+  let syncMode   = true;
+  let timeWindow = 10;    // ms
+  let gainVal    = 5;
+  let animId     = null;
+  let frozenSnapshot = null;
+
+  // Rolling sample buffer — we accumulate samples via AudioWorklet/ScriptProcessor
+  // so we always have enough data for the longest window (500 ms)
+  const MAX_BUFFER_SEC = 0.6; // keep 600 ms of history
+  let sampleRate = 44100;
+  let ringBuffer = null;      // Float32Array
+  let ringWrite  = 0;         // write position in ring
+
+  // Marker lines: { id, timeMs, el }
+  let markers = [];
+  let nextMarkerId = 0;
+
+  // ── Gradient for the fill ──
+  const fillGrad = ctx.createLinearGradient(0, PAD_TOP, 0, PAD_TOP + PLOT_H);
+  fillGrad.addColorStop(0, 'rgba(16,185,129,0.30)');
+  fillGrad.addColorStop(0.5, 'rgba(16,185,129,0.02)');
+  fillGrad.addColorStop(1, 'rgba(16,185,129,0.30)');
+
+  // ── Time ↔ X mapping ──
+  function timeToX(t) {
+    return PAD_LEFT + (t / timeWindow) * PLOT_W;
+  }
+  function xToTime(x) {
+    return ((x - PAD_LEFT) / PLOT_W) * timeWindow;
+  }
+
+  // ── Amplitude → Y (val in -1..1, clamped) ──
+  function ampToY(val) {
+    const clamped = Math.max(-1, Math.min(1, val));
+    return MID_Y - clamped * (PLOT_H / 2);
+  }
+
+  // ── Nice tick step ──
+  function niceStep(range, targetTicks) {
+    const rough = range / targetTicks;
+    const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+    const res = rough / mag;
+    if (res <= 1.5) return mag;
+    if (res <= 3.5) return 2 * mag;
+    if (res <= 7.5) return 5 * mag;
+    return 10 * mag;
+  }
+
+  // ── Trigger: find rising zero-crossing ──
+  // Searches backwards from the end of the ring buffer for a rising zero-crossing
+  // Returns the index in the ring buffer where the triggered window starts,
+  // or -1 if no trigger found.
+  function findTrigger(samplesNeeded) {
+    // We need extra samples before the trigger to scan for the crossing
+    const scanExtra = Math.min(samplesNeeded, 2048);
+    const totalNeeded = samplesNeeded + scanExtra;
+    const bufLen = ringBuffer.length;
+
+    // Start of our search region in the ring buffer
+    const searchStart = ((ringWrite - totalNeeded) % bufLen + bufLen) % bufLen;
+
+    // Scan forward through the extra region looking for a rising zero-crossing
+    // with some minimum amplitude around it (to avoid noise triggers)
+    const threshold = 0.01;
+    let bestIdx = -1;
+
+    for (let i = 0; i < scanExtra - 1; i++) {
+      const idx0 = (searchStart + i) % bufLen;
+      const idx1 = (searchStart + i + 1) % bufLen;
+      const v0 = ringBuffer[idx0];
+      const v1 = ringBuffer[idx1];
+
+      if (v0 <= 0 && v1 > 0 && (v1 - v0) > threshold) {
+        bestIdx = (searchStart + i + 1) % bufLen;
+      }
+    }
+
+    return bestIdx;
+  }
+
+  // ── Draw the waveform frame ──
+  function drawFrame(snapshot) {
+    // snapshot: { samples: Float32Array, triggerLocked: bool }
+    const samples = snapshot.samples;
+    const samplesNeeded = samples.length;
+
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+    // Background
+    ctx.fillStyle = '#0a0c12';
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    // Plot area background
+    ctx.fillStyle = '#0f1219';
+    ctx.fillRect(PAD_LEFT, PAD_TOP, PLOT_W, PLOT_H);
+
+    // ── Grid lines ──
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+
+    // Horizontal grid — center line and quarter lines
+    for (const frac of [-1, -0.5, 0, 0.5, 1]) {
+      const y = ampToY(frac);
+      ctx.beginPath();
+      ctx.moveTo(PAD_LEFT, y);
+      ctx.lineTo(PAD_LEFT + PLOT_W, y);
+      ctx.stroke();
+    }
+    // Zero line slightly brighter
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.beginPath();
+    ctx.moveTo(PAD_LEFT, MID_Y);
+    ctx.lineTo(PAD_LEFT + PLOT_W, MID_Y);
+    ctx.stroke();
+
+    // Time ticks (vertical grid)
+    const step = niceStep(timeWindow, 8);
+    const timeTicks = [];
+    for (let t = step; t < timeWindow; t += step) timeTicks.push(t);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    for (const t of timeTicks) {
+      const x = timeToX(t);
+      ctx.beginPath();
+      ctx.moveTo(x, PAD_TOP);
+      ctx.lineTo(x, PAD_TOP + PLOT_H);
+      ctx.stroke();
+    }
+
+    // ── Draw waveform ──
+    ctx.beginPath();
+    const gain = gainVal;
+
+    for (let px = 0; px <= PLOT_W; px++) {
+      const sampleIdx = (px / PLOT_W) * (samplesNeeded - 1);
+      const lo = Math.floor(sampleIdx);
+      const hi = Math.min(lo + 1, samplesNeeded - 1);
+      const frac = sampleIdx - lo;
+      const val = (samples[lo] * (1 - frac) + samples[hi] * frac) * gain;
+      const y = ampToY(val);
+
+      if (px === 0) {
+        ctx.moveTo(PAD_LEFT, y);
+      } else {
+        ctx.lineTo(PAD_LEFT + px, y);
+      }
+    }
+
+    // Stroke
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Fill towards center
+    // Close the path by going to right edge at center, then left edge at center
+    ctx.lineTo(PAD_LEFT + PLOT_W, MID_Y);
+    ctx.lineTo(PAD_LEFT, MID_Y);
+    ctx.closePath();
+    ctx.fillStyle = fillGrad;
+    ctx.fill();
+
+    // ── Axis labels ──
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+
+    // Time labels along bottom
+    // Always show 0
+    ctx.fillText('0', PAD_LEFT, PAD_TOP + PLOT_H + 18);
+    for (const t of timeTicks) {
+      const x = timeToX(t);
+      if (x > PAD_LEFT + PLOT_W - 20) continue;
+      ctx.fillText(formatTime(t), x, PAD_TOP + PLOT_H + 18);
+    }
+
+    // "ms" label
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillText('ms', PAD_LEFT + PLOT_W + 2, PAD_TOP + PLOT_H + 18);
+
+    // Amplitude labels along left
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    const ampLabels = [
+      { val: 1, label: '+1' },
+      { val: 0.5, label: '+0.5' },
+      { val: 0, label: '0' },
+      { val: -0.5, label: '-0.5' },
+      { val: -1, label: '-1' },
+    ];
+    for (const a of ampLabels) {
+      const y = ampToY(a.val);
+      ctx.fillText(a.label, PAD_LEFT - 6, y + 3);
+    }
+
+    // ── Plot border ──
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(PAD_LEFT, PAD_TOP, PLOT_W, PLOT_H);
+
+    // ── Sync indicator ──
+    if (syncMode && running) {
+      syncIndicator.textContent = snapshot.triggerLocked ? 'locked' : 'searching';
+      syncIndicator.classList.toggle('locked', snapshot.triggerLocked);
+    } else {
+      syncIndicator.textContent = '';
+    }
+  }
+
+  function formatTime(ms) {
+    if (ms >= 1) {
+      return ms % 1 === 0 ? ms + '' : ms.toFixed(1);
+    }
+    return ms.toFixed(2);
+  }
+
+  // ── Extract samples for the current window from ring buffer ──
+  function extractWindow() {
+    const samplesNeeded = Math.ceil((timeWindow / 1000) * sampleRate);
+    const bufLen = ringBuffer.length;
+    let startIdx;
+    let triggerLocked = false;
+
+    if (syncMode) {
+      const trigIdx = findTrigger(samplesNeeded);
+      if (trigIdx >= 0) {
+        startIdx = trigIdx;
+        triggerLocked = true;
+      } else {
+        // No trigger found, just use most recent data
+        startIdx = ((ringWrite - samplesNeeded) % bufLen + bufLen) % bufLen;
+      }
+    } else {
+      startIdx = ((ringWrite - samplesNeeded) % bufLen + bufLen) % bufLen;
+    }
+
+    const out = new Float32Array(samplesNeeded);
+    for (let i = 0; i < samplesNeeded; i++) {
+      out[i] = ringBuffer[(startIdx + i) % bufLen];
+    }
+    return { samples: out, triggerLocked };
+  }
+
+  // ── Animation loop ──
+  function animLoop() {
+    if (!running || paused) return;
+    if (ringBuffer) {
+      const snapshot = extractWindow();
+      drawFrame(snapshot);
+    }
+    animId = requestAnimationFrame(animLoop);
+  }
+
+  // ── Start / Pause ──
+  async function startMic() {
+    if (running) {
+      paused = false;
+      btnPause.textContent = 'Pause';
+      frozenSnapshot = null;
+      animLoop();
+      return;
+    }
+
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      alert('Microphone access denied. Please allow microphone access and try again.');
+      return;
+    }
+
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    sampleRate = audioCtx.sampleRate;
+
+    // Create ring buffer large enough for MAX_BUFFER_SEC
+    const ringSize = Math.ceil(MAX_BUFFER_SEC * sampleRate);
+    ringBuffer = new Float32Array(ringSize);
+    ringWrite = 0;
+
+    const source = audioCtx.createMediaStreamSource(micStream);
+
+    // Use ScriptProcessorNode (deprecated but universally supported)
+    // to fill our ring buffer with raw samples
+    const bufferSize = 4096;
+    const processor = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+    processor.onaudioprocess = function(e) {
+      const input = e.inputBuffer.getChannelData(0);
+      for (let i = 0; i < input.length; i++) {
+        ringBuffer[ringWrite] = input[i];
+        ringWrite = (ringWrite + 1) % ringBuffer.length;
+      }
+    };
+
+    source.connect(processor);
+    processor.connect(audioCtx.destination); // must connect to keep it alive
+
+    running = true;
+    paused  = false;
+    btnStart.textContent = 'Restart';
+    btnPause.disabled = false;
+    animLoop();
+  }
+
+  function togglePause() {
+    if (!running) return;
+    paused = !paused;
+    btnPause.textContent = paused ? 'Resume' : 'Pause';
+    if (paused) {
+      frozenSnapshot = extractWindow();
+      drawFrame(frozenSnapshot);
+    } else {
+      frozenSnapshot = null;
+      animLoop();
+    }
+  }
+
+  btnStart.addEventListener('click', startMic);
+  btnPause.addEventListener('click', togglePause);
+
+  // ── Sync toggle ──
+  toggleSync.addEventListener('click', () => {
+    syncMode = !syncMode;
+    toggleSync.classList.toggle('active', syncMode);
+    if (!syncMode) {
+      syncIndicator.textContent = '';
+      syncIndicator.classList.remove('locked');
+    }
+    if (paused && frozenSnapshot) {
+      // re-extract with new sync mode from frozen data isn't possible,
+      // but if still running we'll pick it up next frame
+    }
+  });
+  toggleSync.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSync.click(); }
+  });
+
+  // ── Gain slider ──
+  gainSlider.addEventListener('input', () => {
+    gainVal = parseInt(gainSlider.value, 10);
+    if (paused && frozenSnapshot) drawFrame(frozenSnapshot);
+  });
+
+  // ── Clear markers button ──
+  btnClear.addEventListener('click', removeAllMarkers);
+
+  // ── Time window radio ──
+  document.querySelectorAll('input[name="twindow"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      timeWindow = parseFloat(radio.value);
+      removeAllMarkers();
+      if (paused && frozenSnapshot) {
+        frozenSnapshot = extractWindow();
+        drawFrame(frozenSnapshot);
+      }
+    });
+  });
+
+  // ── Stagger marker labels to avoid overlap ──
+  const LABEL_STAGGER_OFFSETS = [8, 30, 52, 74, 96];
+
+  function staggerLabels() {
+    const sorted = markers.slice().sort((a, b) => timeToX(a.timeMs) - timeToX(b.timeMs));
+    const assigned = [];
+
+    for (const m of sorted) {
+      const x = timeToX(m.timeMs);
+      const labelW = 90;
+      let level = 0;
+      for (level = 0; level < LABEL_STAGGER_OFFSETS.length; level++) {
+        const collides = assigned.some(a =>
+          a.level === level && Math.abs(x - a.x) < labelW
+        );
+        if (!collides) break;
+      }
+      if (level >= LABEL_STAGGER_OFFSETS.length) level = LABEL_STAGGER_OFFSETS.length - 1;
+      assigned.push({ x, level });
+      m.labelEl.style.top = LABEL_STAGGER_OFFSETS[level] + 'px';
+    }
+  }
+
+  // ── Marker lines (vertical — time markers) ──
+  function addMarker(timeMs) {
+    const id = nextMarkerId++;
+    const x  = timeToX(timeMs);
+
+    const lineEl = document.createElement('div');
+    lineEl.className = 'marker-line';
+    lineEl.style.left = x + 'px';
+
+    const handleEl = document.createElement('div');
+    handleEl.className = 'marker-drag-handle';
+    handleEl.innerHTML = '&#9664;&#9654;';
+    handleEl.title = 'Drag to reposition';
+    lineEl.appendChild(handleEl);
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'marker-label';
+    labelEl.style.top = '8px';
+    labelEl.innerHTML = `<span class="marker-time-text">${formatMarkerTime(timeMs)}</span><span class="marker-delete" title="Remove marker">&times;</span>`;
+    lineEl.appendChild(labelEl);
+
+    wrapper.appendChild(lineEl);
+
+    const marker = { id, timeMs, el: lineEl, labelEl, handleEl };
+    markers.push(marker);
+
+    labelEl.querySelector('.marker-delete').addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeMarker(id);
+    });
+
+    makeDraggable(marker);
+    staggerLabels();
+    return marker;
+  }
+
+  function removeMarker(id) {
+    const idx = markers.findIndex(m => m.id === id);
+    if (idx === -1) return;
+    markers[idx].el.remove();
+    markers.splice(idx, 1);
+    staggerLabels();
+  }
+
+  function removeAllMarkers() {
+    for (const m of markers) m.el.remove();
+    markers = [];
+  }
+
+  function repositionMarkers() {
+    for (const m of markers) {
+      const x = timeToX(m.timeMs);
+      m.el.style.left = x + 'px';
+      m.el.querySelector('.marker-time-text').textContent = formatMarkerTime(m.timeMs);
+    }
+    staggerLabels();
+  }
+
+  function formatMarkerTime(ms) {
+    if (ms >= 1) return ms.toFixed(2) + ' ms';
+    return (ms * 1000).toFixed(0) + ' \u00B5s';
+  }
+
+  function makeDraggable(marker) {
+    const labelEl = marker.labelEl;
+    const handleEl = marker.handleEl;
+    let dragging = false;
+
+    labelEl.addEventListener('mousedown', onStart);
+    labelEl.addEventListener('touchstart', onStart, { passive: false });
+    handleEl.addEventListener('mousedown', onStart);
+    handleEl.addEventListener('touchstart', onStart, { passive: false });
+
+    function onStart(e) {
+      if (e.target.classList.contains('marker-delete')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onEnd);
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onEnd);
+    }
+
+    function onMove(e) {
+      if (!dragging) return;
+      e.preventDefault();
+      const rect = wrapper.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const scaleX = WIDTH / rect.width;
+      let x = (clientX - rect.left) * scaleX;
+      x = Math.max(PAD_LEFT, Math.min(PAD_LEFT + PLOT_W, x));
+
+      marker.timeMs = xToTime(x);
+      marker.el.style.left = x + 'px';
+      marker.el.querySelector('.marker-time-text').textContent = formatMarkerTime(marker.timeMs);
+      staggerLabels();
+    }
+
+    function onEnd() {
+      dragging = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onEnd);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+    }
+  }
+
+  // Click on canvas wrapper to add marker
+  wrapper.addEventListener('click', (e) => {
+    if (e.target.closest('.marker-label') || e.target.closest('.marker-drag-handle')) return;
+    const rect = wrapper.getBoundingClientRect();
+    const scaleX = WIDTH / rect.width;
+    const x = (e.clientX - rect.left) * scaleX;
+    if (x < PAD_LEFT || x > PAD_LEFT + PLOT_W) return;
+    const t = xToTime(x);
+    if (t >= 0 && t <= timeWindow) {
+      addMarker(t);
+    }
+  });
+
+  // ── Draw empty chart on load ──
+  function drawEmpty() {
+    ctx.fillStyle = '#0a0c12';
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    ctx.fillStyle = '#0f1219';
+    ctx.fillRect(PAD_LEFT, PAD_TOP, PLOT_W, PLOT_H);
+
+    // Zero line
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PAD_LEFT, MID_Y);
+    ctx.lineTo(PAD_LEFT + PLOT_W, MID_Y);
+    ctx.stroke();
+
+    // Horizontal grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    for (const frac of [-1, -0.5, 0.5, 1]) {
+      const y = ampToY(frac);
+      ctx.beginPath();
+      ctx.moveTo(PAD_LEFT, y);
+      ctx.lineTo(PAD_LEFT + PLOT_W, y);
+      ctx.stroke();
+    }
+
+    // Time axis
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    const step = niceStep(timeWindow, 8);
+    ctx.fillText('0', PAD_LEFT, PAD_TOP + PLOT_H + 18);
+    for (let t = step; t < timeWindow; t += step) {
+      const x = timeToX(t);
+      if (x > PAD_LEFT + PLOT_W - 20) continue;
+      ctx.fillText(formatTime(t), x, PAD_TOP + PLOT_H + 18);
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.beginPath();
+      ctx.moveTo(x, PAD_TOP);
+      ctx.lineTo(x, PAD_TOP + PLOT_H);
+      ctx.stroke();
+    }
+
+    // ms label
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillText('ms', PAD_LEFT + PLOT_W + 2, PAD_TOP + PLOT_H + 18);
+
+    // Amplitude labels
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    const ampLabels = [
+      { val: 1, label: '+1' },
+      { val: 0.5, label: '+0.5' },
+      { val: 0, label: '0' },
+      { val: -0.5, label: '-0.5' },
+      { val: -1, label: '-1' },
+    ];
+    for (const a of ampLabels) {
+      const y = ampToY(a.val);
+      ctx.fillText(a.label, PAD_LEFT - 6, y + 3);
+    }
+
+    // Border
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(PAD_LEFT, PAD_TOP, PLOT_W, PLOT_H);
+  }
+
+  drawEmpty();
+})();
+</script>
+
+</body>
+</html>
