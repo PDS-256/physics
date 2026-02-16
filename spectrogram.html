@@ -516,8 +516,8 @@
     analyser.fftSize = FFT_SIZE;
     analyser.smoothingTimeConstant = 0.6;
     const sensVal = parseInt(sensitivitySlider.value, 10);
-    analyser.minDecibels = -120 + sensVal * 0.7;
-    analyser.maxDecibels = -20 + sensVal * 0.1;
+    analyser.minDecibels = -50 - sensVal * 0.7;
+    analyser.maxDecibels = -10 - sensVal * 0.1;
 
     const source = audioCtx.createMediaStreamSource(micStream);
     source.connect(analyser);
@@ -565,11 +565,11 @@
   const sensitivitySlider = document.getElementById('sensitivity');
   sensitivitySlider.addEventListener('input', () => {
     if (!analyser) return;
-    // Map 0-100 → minDecibels from -120 (low sens) to -50 (high sens)
-    // and maxDecibels from -10 (fixed)
+    // Higher slider = more sensitive (picks up quieter sounds)
+    // Map 0-100 → minDecibels from -50 (low sens) to -120 (high sens)
     const val = parseInt(sensitivitySlider.value, 10);
-    analyser.minDecibels = -120 + val * 0.7;   // range: -120 to -50
-    analyser.maxDecibels = -20 + val * 0.1;     // range: -20 to -10
+    analyser.minDecibels = -50 - val * 0.7;    // range: -50 to -120
+    analyser.maxDecibels = -10 - val * 0.1;    // range: -10 to -20
   });
 
   // ── Frequency range radio ──
