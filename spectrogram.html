@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Spectrogram — Physics of Sound</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0f1117;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #f0f0f0;
+    }
+    .subtitle {
+      font-size: 0.85rem;
+      color: #888;
+      margin-bottom: 18px;
+    }
+
+    /* ── Controls bar ── */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+      justify-content: center;
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 10px;
+      padding: 12px 20px;
+      margin-bottom: 16px;
+      max-width: 960px;
+      width: 100%;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .control-group label {
+      font-size: 0.8rem;
+      color: #aaa;
+      white-space: nowrap;
+    }
+
+    /* Buttons */
+    .btn {
+      border: none;
+      border-radius: 6px;
+      padding: 7px 16px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.96); }
+
+    .btn-start {
+      background: #3b82f6;
+      color: #fff;
+    }
+    .btn-start:hover { background: #2563eb; }
+
+    .btn-pause {
+      background: #f59e0b;
+      color: #1a1a1a;
+    }
+    .btn-pause:hover { background: #d97706; }
+
+    .btn-clear {
+      background: #374151;
+      color: #ccc;
+    }
+    .btn-clear:hover { background: #4b5563; }
+
+    /* Toggle switch */
+    .toggle-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .toggle {
+      position: relative;
+      width: 38px;
+      height: 20px;
+      background: #374151;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle.active { background: #3b82f6; }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .toggle.active::after { transform: translateX(18px); }
+
+    /* Radio pills */
+    .freq-range-group {
+      display: flex;
+      gap: 0;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #2a2d3a;
+    }
+    .freq-range-group input[type="radio"] { display: none; }
+    .freq-range-group label {
+      padding: 5px 10px;
+      font-size: 0.75rem;
+      color: #aaa;
+      background: #1a1d27;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      border-right: 1px solid #2a2d3a;
+      white-space: nowrap;
+    }
+    .freq-range-group label:last-of-type { border-right: none; }
+    .freq-range-group input[type="radio"]:checked + label {
+      background: #3b82f6;
+      color: #fff;
+    }
+
+    /* ── Spectrogram canvas area ── */
+    .canvas-wrapper {
+      position: relative;
+      max-width: 960px;
+      width: 100%;
+      background: #000;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #2a2d3a;
+      cursor: crosshair;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+    }
+
+    /* Frequency marker lines (overlay) */
+    .marker-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 0;
+      border-top: 2px dashed rgba(255, 255, 255, 0.85);
+      pointer-events: none;
+      z-index: 10;
+    }
+    .marker-label {
+      position: absolute;
+      right: 8px;
+      top: -22px;
+      background: rgba(0, 0, 0, 0.75);
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .marker-delete {
+      cursor: pointer;
+      color: #f87171;
+      font-size: 0.85rem;
+      font-weight: 700;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    .marker-delete:hover { color: #ef4444; }
+
+    /* Frequency axis labels (left side overlay) */
+    .freq-axis {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 52px;
+      pointer-events: none;
+      z-index: 5;
+    }
+    .freq-tick {
+      position: absolute;
+      left: 0;
+      font-size: 0.65rem;
+      color: rgba(255,255,255,0.5);
+      padding-left: 4px;
+      transform: translateY(-50%);
+    }
+
+    /* Color legend */
+    .legend {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      font-size: 0.75rem;
+      color: #888;
+    }
+    .legend-bar {
+      width: 120px;
+      height: 10px;
+      border-radius: 3px;
+    }
+
+    /* Instruction hint */
+    .hint {
+      font-size: 0.75rem;
+      color: #666;
+      margin-top: 8px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Live Spectrogram</h1>
+  <p class="subtitle">Physics of Sound &mdash; Real-time frequency analysis from your microphone</p>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button id="btnStart" class="btn btn-start">Start Microphone</button>
+    <button id="btnPause" class="btn btn-pause" disabled>Pause</button>
+    <button id="btnClear" class="btn btn-clear">Clear</button>
+
+    <div class="toggle-wrapper">
+      <label style="font-size:0.8rem;color:#aaa;">Log scale</label>
+      <div id="toggleLog" class="toggle" role="button" tabindex="0" aria-label="Toggle log scale"></div>
+    </div>
+
+    <div class="control-group">
+      <label>Range:</label>
+      <div class="freq-range-group">
+        <input type="radio" name="frange" id="fr1000" value="1000">
+        <label for="fr1000">1 kHz</label>
+        <input type="radio" name="frange" id="fr2000" value="2000">
+        <label for="fr2000">2 kHz</label>
+        <input type="radio" name="frange" id="fr4000" value="4000" checked>
+        <label for="fr4000">4 kHz</label>
+        <input type="radio" name="frange" id="fr20000" value="20000">
+        <label for="fr20000">20 kHz</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Canvas -->
+  <div class="canvas-wrapper" id="canvasWrapper">
+    <canvas id="spectrogram"></canvas>
+    <div class="freq-axis" id="freqAxis"></div>
+  </div>
+
+  <div class="legend">
+    <span>Quiet</span>
+    <canvas id="legendBar" class="legend-bar" width="120" height="10"></canvas>
+    <span>Loud</span>
+  </div>
+  <p class="hint">Click on the spectrogram to place a frequency marker line. Drag to reposition.</p>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── DOM refs ──
+  const canvas      = document.getElementById('spectrogram');
+  const ctx         = canvas.getContext('2d');
+  const wrapper     = document.getElementById('canvasWrapper');
+  const freqAxisEl  = document.getElementById('freqAxis');
+  const btnStart    = document.getElementById('btnStart');
+  const btnPause    = document.getElementById('btnPause');
+  const btnClear    = document.getElementById('btnClear');
+  const toggleLog   = document.getElementById('toggleLog');
+
+  // ── State ──
+  const FFT_SIZE = 4096;
+  let audioCtx, analyser, micStream, dataArray;
+  let running   = false;
+  let paused    = false;
+  let logScale  = false;
+  let maxFreq   = 4000;
+  let animId    = null;
+
+  // Spectrogram image buffer — we scroll left and draw new column on right
+  const WIDTH  = 960;
+  const HEIGHT = 400;
+  canvas.width  = WIDTH;
+  canvas.height = HEIGHT;
+
+  // Off-screen buffer for scrolling
+  const offscreen    = document.createElement('canvas');
+  offscreen.width    = WIDTH;
+  offscreen.height   = HEIGHT;
+  const offCtx       = offscreen.getContext('2d');
+
+  // Marker lines: { id, freq, el }
+  let markers = [];
+  let nextMarkerId = 0;
+
+  // ── Color map (magma-inspired) ──
+  function intensityColor(val) {
+    // val 0..1
+    const t = Math.max(0, Math.min(1, val));
+    // dark → purple → orange → yellow → white
+    const r = Math.round(255 * Math.min(1, t * 3));
+    const g = Math.round(255 * Math.max(0, Math.min(1, (t - 0.33) * 3)));
+    const b = Math.round(255 * Math.max(0, Math.min(1, 0.5 - t * 0.5 + t * t * 1.2)));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  // Build a lookup table for speed
+  const COLOR_LUT = new Array(256);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255;
+    const r = Math.round(255 * Math.min(1, t * 3));
+    const g = Math.round(255 * Math.max(0, Math.min(1, (t - 0.33) * 3)));
+    const b = Math.round(255 * Math.max(0, Math.min(1, 0.5 - t * 0.5 + t * t * 1.2)));
+    COLOR_LUT[i] = [r, g, b];
+  }
+
+  // ── Legend bar ──
+  (function drawLegend() {
+    const lc = document.getElementById('legendBar').getContext('2d');
+    for (let x = 0; x < 120; x++) {
+      const c = COLOR_LUT[Math.round(x / 119 * 255)];
+      lc.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+      lc.fillRect(x, 0, 1, 10);
+    }
+  })();
+
+  // ── Frequency ↔ Y mapping ──
+  function freqToY(freq) {
+    if (logScale) {
+      const minF = 20;
+      const logMin = Math.log10(minF);
+      const logMax = Math.log10(maxFreq);
+      const logF   = Math.log10(Math.max(minF, freq));
+      const ratio  = (logF - logMin) / (logMax - logMin);
+      return HEIGHT - ratio * HEIGHT;
+    }
+    return HEIGHT - (freq / maxFreq) * HEIGHT;
+  }
+
+  function yToFreq(y) {
+    if (logScale) {
+      const minF = 20;
+      const logMin = Math.log10(minF);
+      const logMax = Math.log10(maxFreq);
+      const ratio  = (HEIGHT - y) / HEIGHT;
+      return Math.pow(10, logMin + ratio * (logMax - logMin));
+    }
+    return ((HEIGHT - y) / HEIGHT) * maxFreq;
+  }
+
+  // ── Frequency axis ticks ──
+  function updateFreqAxis() {
+    freqAxisEl.innerHTML = '';
+    let ticks;
+    if (logScale) {
+      // Log ticks
+      ticks = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000].filter(f => f <= maxFreq && f >= 20);
+    } else {
+      // Linear ticks — roughly 8 ticks
+      const step = niceStep(maxFreq, 8);
+      ticks = [];
+      for (let f = step; f <= maxFreq; f += step) ticks.push(f);
+    }
+    for (const f of ticks) {
+      const y = freqToY(f);
+      if (y < 5 || y > HEIGHT - 5) continue;
+      const el = document.createElement('div');
+      el.className = 'freq-tick';
+      el.style.top = y + 'px';
+      el.textContent = f >= 1000 ? (f / 1000) + 'k' : f + '';
+      freqAxisEl.appendChild(el);
+    }
+  }
+
+  function niceStep(range, targetTicks) {
+    const rough = range / targetTicks;
+    const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+    const res = rough / mag;
+    if (res <= 1.5) return mag;
+    if (res <= 3.5) return 2 * mag;
+    if (res <= 7.5) return 5 * mag;
+    return 10 * mag;
+  }
+
+  // ── Spectrogram drawing ──
+  function drawColumn() {
+    if (!analyser) return;
+    analyser.getByteFrequencyData(dataArray);
+
+    const nyquist    = audioCtx.sampleRate / 2;
+    const binCount   = analyser.frequencyBinCount;
+    const freqPerBin = nyquist / binCount;
+
+    // Scroll left by 1px
+    offCtx.drawImage(offscreen, -1, 0);
+    // Clear rightmost column
+    offCtx.clearRect(WIDTH - 1, 0, 1, HEIGHT);
+
+    // Draw new column pixel by pixel
+    const imgData = offCtx.createImageData(1, HEIGHT);
+    const pixels  = imgData.data;
+
+    for (let py = 0; py < HEIGHT; py++) {
+      const freq = yToFreq(py);
+      if (freq < 0 || freq > nyquist) {
+        // out of range → black
+        const idx = py * 4;
+        pixels[idx] = pixels[idx+1] = pixels[idx+2] = 0;
+        pixels[idx+3] = 255;
+        continue;
+      }
+      // Interpolate between bins
+      const bin   = freq / freqPerBin;
+      const binLo = Math.floor(bin);
+      const binHi = Math.min(binLo + 1, binCount - 1);
+      const frac  = bin - binLo;
+      const val   = dataArray[binLo] * (1 - frac) + dataArray[binHi] * frac;
+
+      const ci  = Math.round(val);
+      const c   = COLOR_LUT[Math.min(255, ci)];
+      const idx = py * 4;
+      pixels[idx]     = c[0];
+      pixels[idx + 1] = c[1];
+      pixels[idx + 2] = c[2];
+      pixels[idx + 3] = 255;
+    }
+
+    offCtx.putImageData(imgData, WIDTH - 1, 0);
+
+    // Copy to visible canvas
+    ctx.drawImage(offscreen, 0, 0);
+  }
+
+  function animLoop() {
+    if (!running || paused) return;
+    drawColumn();
+    animId = requestAnimationFrame(animLoop);
+  }
+
+  // ── Start / Pause / Clear ──
+  async function startMic() {
+    if (running) {
+      // Resume from pause
+      paused = false;
+      btnPause.textContent = 'Pause';
+      animLoop();
+      return;
+    }
+
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      alert('Microphone access denied. Please allow microphone access and try again.');
+      return;
+    }
+
+    audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+    analyser  = audioCtx.createAnalyser();
+    analyser.fftSize = FFT_SIZE;
+    analyser.smoothingTimeConstant = 0.6;
+    analyser.minDecibels = -90;
+    analyser.maxDecibels = -10;
+
+    const source = audioCtx.createMediaStreamSource(micStream);
+    source.connect(analyser);
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    running = true;
+    paused  = false;
+    btnStart.textContent = 'Restart';
+    btnPause.disabled = false;
+    updateFreqAxis();
+    animLoop();
+  }
+
+  function togglePause() {
+    if (!running) return;
+    paused = !paused;
+    btnPause.textContent = paused ? 'Resume' : 'Pause';
+    if (!paused) animLoop();
+  }
+
+  function clearSpectrogram() {
+    offCtx.clearRect(0, 0, WIDTH, HEIGHT);
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+  }
+
+  btnStart.addEventListener('click', startMic);
+  btnPause.addEventListener('click', togglePause);
+  btnClear.addEventListener('click', clearSpectrogram);
+
+  // ── Log scale toggle ──
+  toggleLog.addEventListener('click', () => {
+    logScale = !logScale;
+    toggleLog.classList.toggle('active', logScale);
+    updateFreqAxis();
+    repositionMarkers();
+  });
+  toggleLog.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleLog.click(); }
+  });
+
+  // ── Frequency range radio ──
+  document.querySelectorAll('input[name="frange"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      maxFreq = parseInt(radio.value, 10);
+      updateFreqAxis();
+      repositionMarkers();
+    });
+  });
+
+  // ── Marker lines ──
+  function addMarker(freq) {
+    const id = nextMarkerId++;
+    const y  = freqToY(freq);
+
+    const lineEl = document.createElement('div');
+    lineEl.className = 'marker-line';
+    lineEl.style.top = y + 'px';
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'marker-label';
+    labelEl.innerHTML = `<span class="marker-freq-text">${formatFreq(freq)}</span><span class="marker-delete" title="Remove marker">&times;</span>`;
+    lineEl.appendChild(labelEl);
+
+    wrapper.appendChild(lineEl);
+
+    const marker = { id, freq, el: lineEl, labelEl };
+    markers.push(marker);
+
+    // Delete handler
+    labelEl.querySelector('.marker-delete').addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeMarker(id);
+    });
+
+    // Drag handler
+    makeDraggable(marker);
+    return marker;
+  }
+
+  function removeMarker(id) {
+    const idx = markers.findIndex(m => m.id === id);
+    if (idx === -1) return;
+    markers[idx].el.remove();
+    markers.splice(idx, 1);
+  }
+
+  function repositionMarkers() {
+    for (const m of markers) {
+      const y = freqToY(m.freq);
+      m.el.style.top = y + 'px';
+      m.el.querySelector('.marker-freq-text').textContent = formatFreq(m.freq);
+    }
+  }
+
+  function formatFreq(f) {
+    if (f >= 1000) return (f / 1000).toFixed(2) + ' kHz';
+    return Math.round(f) + ' Hz';
+  }
+
+  function makeDraggable(marker) {
+    const labelEl = marker.labelEl;
+    let dragging = false;
+
+    labelEl.addEventListener('mousedown', onStart);
+    labelEl.addEventListener('touchstart', onStart, { passive: false });
+
+    function onStart(e) {
+      // Ignore clicks on delete button
+      if (e.target.classList.contains('marker-delete')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onEnd);
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onEnd);
+    }
+
+    function onMove(e) {
+      if (!dragging) return;
+      e.preventDefault();
+      const rect = wrapper.getBoundingClientRect();
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      let y = clientY - rect.top;
+      y = Math.max(0, Math.min(HEIGHT, y));
+
+      marker.freq = yToFreq(y);
+      marker.el.style.top = y + 'px';
+      marker.el.querySelector('.marker-freq-text').textContent = formatFreq(marker.freq);
+    }
+
+    function onEnd() {
+      dragging = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onEnd);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+    }
+  }
+
+  // Click on canvas to add marker
+  wrapper.addEventListener('click', (e) => {
+    if (e.target.closest('.marker-label')) return;
+    const rect = wrapper.getBoundingClientRect();
+    const y    = e.clientY - rect.top;
+    const freq = yToFreq(y);
+    if (freq > 0 && freq <= maxFreq) {
+      addMarker(freq);
+    }
+  });
+
+  // ── Init ──
+  updateFreqAxis();
+})();
+</script>
+
+</body>
+</html>
