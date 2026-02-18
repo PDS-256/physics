@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wave Superposition — Phase &amp; Group Velocity</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0f1117;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 60px;
+    }
+
+    h1 { font-size: 1.6rem; font-weight: 600; margin-bottom: 4px; color: #f0f0f0; }
+    .subtitle { font-size: 0.85rem; color: #888; margin-bottom: 20px; text-align: center; line-height: 1.5; }
+
+    /* ── Panels ── */
+    .panel {
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 10px;
+      padding: 16px 24px;
+      max-width: 960px;
+      width: 100%;
+      margin-bottom: 14px;
+    }
+    .panel-title {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #555;
+      margin-bottom: 12px;
+    }
+
+    /* ── Wave parameter cards ── */
+    .wave-params {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .wave-card {
+      flex: 1;
+      min-width: 280px;
+      background: #14161e;
+      border: 1px solid #2a2d3a;
+      border-radius: 8px;
+      padding: 14px 18px;
+    }
+    .wave-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .wave-card-title {
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .wave-card-title.wc1 { color: #3b82f6; }
+    .wave-card-title.wc2 { color: #f59e0b; }
+
+    .param-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .param-row:last-child { margin-bottom: 0; }
+
+    .param-label {
+      font-size: 0.78rem;
+      color: #999;
+      width: 80px;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .param-label .math {
+      font-style: italic;
+      color: #bbb;
+    }
+
+    .param-input {
+      width: 72px;
+      background: #0f1117;
+      border: 1px solid #374151;
+      border-radius: 5px;
+      color: #f0f0f0;
+      font-size: 0.88rem;
+      font-weight: 600;
+      padding: 4px 6px;
+      text-align: center;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    .param-input:focus { outline: none; border-color: #3b82f6; }
+
+    .param-unit {
+      font-size: 0.72rem;
+      color: #555;
+      width: 42px;
+    }
+
+    .param-slider {
+      flex: 1;
+      accent-color: #3b82f6;
+      cursor: pointer;
+    }
+    .wc2 .param-slider { accent-color: #f59e0b; }
+
+    /* ── Derived quantities ── */
+    .derived {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+      padding: 4px 0;
+    }
+    .derived-item {
+      text-align: center;
+    }
+    .derived-label {
+      font-size: 0.68rem;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 2px;
+    }
+    .derived-value {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    .dv-phase { color: #34d399; }
+    .dv-group { color: #f472b6; }
+    .dv-generic { color: #aaa; }
+
+    /* ── Playback controls ── */
+    .playback-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 6px;
+      padding: 8px 20px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.96); }
+
+    .btn-play { background: #10b981; color: #fff; }
+    .btn-play:hover { background: #059669; }
+
+    .btn-pause { background: #f59e0b; color: #1a1a1a; }
+    .btn-pause:hover { background: #d97706; }
+
+    .btn-reset { background: #374151; color: #ccc; }
+    .btn-reset:hover { background: #4b5563; }
+
+    .speed-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .speed-group label {
+      font-size: 0.78rem;
+      color: #888;
+    }
+    .speed-slider {
+      width: 100px;
+      accent-color: #6b7280;
+      cursor: pointer;
+    }
+    .speed-val {
+      font-size: 0.78rem;
+      color: #aaa;
+      width: 30px;
+    }
+
+    .time-display {
+      font-size: 0.78rem;
+      color: #666;
+    }
+    .time-display strong {
+      color: #aaa;
+      font-weight: 600;
+    }
+
+    /* ── Canvases ── */
+    .canvas-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .wave-row {
+      position: relative;
+    }
+    .wave-label {
+      position: absolute;
+      top: 6px;
+      left: 8px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: rgba(0,0,0,0.6);
+      z-index: 2;
+    }
+    .wl-1 { color: #3b82f6; }
+    .wl-2 { color: #f59e0b; }
+    .wl-sum { color: #a78bfa; }
+
+    canvas {
+      display: block;
+      width: 100%;
+      background: #0a0c12;
+      border-radius: 6px;
+      border: 1px solid #1e2030;
+    }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.72rem;
+      color: #888;
+    }
+    .legend-swatch {
+      width: 14px;
+      height: 3px;
+      border-radius: 2px;
+    }
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .hint {
+      font-size: 0.75rem;
+      color: #555;
+      margin-top: 12px;
+      text-align: center;
+      line-height: 1.5;
+      max-width: 700px;
+    }
+
+    /* ── Equation display ── */
+    .equation-bar {
+      font-size: 0.82rem;
+      color: #bbb;
+      text-align: center;
+      padding: 6px 0;
+      font-family: 'Georgia', 'Times New Roman', serif;
+      font-style: italic;
+      line-height: 1.6;
+    }
+    .equation-bar .eq-highlight { color: #f0f0f0; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <h1>Wave Superposition</h1>
+  <p class="subtitle">Phase Velocity &amp; Group Velocity &mdash; Modern Physics</p>
+
+  <!-- Wave parameters -->
+  <div class="panel">
+    <div class="panel-title">Wave Parameters</div>
+    <div class="wave-params">
+      <div class="wave-card wc1">
+        <div class="wave-card-header">
+          <span class="wave-card-title wc1">Wave 1</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label"><span class="math">k</span><sub>1</sub></span>
+          <input type="number" class="param-input" id="k1" value="5" min="0.1" max="50" step="0.1">
+          <span class="param-unit">rad/m</span>
+          <input type="range" class="param-slider" id="k1s" min="0.1" max="50" value="5" step="0.1">
+        </div>
+        <div class="param-row">
+          <span class="param-label"><span class="math">&omega;</span><sub>1</sub></span>
+          <input type="number" class="param-input" id="w1" value="10" min="0.1" max="100" step="0.1">
+          <span class="param-unit">rad/s</span>
+          <input type="range" class="param-slider" id="w1s" min="0.1" max="100" value="10" step="0.1">
+        </div>
+        <div class="param-row">
+          <span class="param-label"><span class="math">A</span><sub>1</sub></span>
+          <input type="number" class="param-input" id="a1" value="1" min="0.1" max="2" step="0.1">
+          <span class="param-unit"></span>
+          <input type="range" class="param-slider" id="a1s" min="0.1" max="2" value="1" step="0.05">
+        </div>
+      </div>
+
+      <div class="wave-card wc2">
+        <div class="wave-card-header">
+          <span class="wave-card-title wc2">Wave 2</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label"><span class="math">k</span><sub>2</sub></span>
+          <input type="number" class="param-input" id="k2" value="6" min="0.1" max="50" step="0.1">
+          <span class="param-unit">rad/m</span>
+          <input type="range" class="param-slider" id="k2s" min="0.1" max="50" value="6" step="0.1">
+        </div>
+        <div class="param-row">
+          <span class="param-label"><span class="math">&omega;</span><sub>2</sub></span>
+          <input type="number" class="param-input" id="w2" value="14" min="0.1" max="100" step="0.1">
+          <span class="param-unit">rad/s</span>
+          <input type="range" class="param-slider" id="w2s" min="0.1" max="100" value="14" step="0.1">
+        </div>
+        <div class="param-row">
+          <span class="param-label"><span class="math">A</span><sub>2</sub></span>
+          <input type="number" class="param-input" id="a2" value="1" min="0.1" max="2" step="0.1">
+          <span class="param-unit"></span>
+          <input type="range" class="param-slider" id="a2s" min="0.1" max="2" value="1" step="0.05">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Derived quantities -->
+  <div class="panel">
+    <div class="equation-bar" id="eqBar"></div>
+    <div class="derived">
+      <div class="derived-item">
+        <div class="derived-label">v<sub>phase,1</sub> = &omega;<sub>1</sub>/k<sub>1</sub></div>
+        <div class="derived-value dv-generic" id="vp1">2.00</div>
+      </div>
+      <div class="derived-item">
+        <div class="derived-label">v<sub>phase,2</sub> = &omega;<sub>2</sub>/k<sub>2</sub></div>
+        <div class="derived-value dv-generic" id="vp2">2.33</div>
+      </div>
+      <div class="derived-item">
+        <div class="derived-label">v<sub>phase</sub> = &omega;<sub>avg</sub>/k<sub>avg</sub></div>
+        <div class="derived-value dv-phase" id="vpAvg">2.18</div>
+      </div>
+      <div class="derived-item">
+        <div class="derived-label">v<sub>group</sub> = &Delta;&omega;/&Delta;k</div>
+        <div class="derived-value dv-group" id="vg">4.00</div>
+      </div>
+      <div class="derived-item">
+        <div class="derived-label">&Delta;k</div>
+        <div class="derived-value dv-generic" id="dk">1.00</div>
+      </div>
+      <div class="derived-item">
+        <div class="derived-label">&Delta;&omega;</div>
+        <div class="derived-value dv-generic" id="dw">4.00</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Playback controls -->
+  <div class="panel">
+    <div class="playback-row">
+      <button class="btn btn-play" id="btnPlay">Play</button>
+      <button class="btn btn-pause" id="btnPause" disabled>Pause</button>
+      <button class="btn btn-reset" id="btnReset">Reset t = 0</button>
+
+      <div class="speed-group">
+        <label>Speed:</label>
+        <input type="range" class="speed-slider" id="speedSlider" min="0.1" max="3" value="1" step="0.1">
+        <span class="speed-val" id="speedVal">1.0x</span>
+      </div>
+
+      <div class="time-display">
+        t = <strong id="timeDisplay">0.00</strong> s
+      </div>
+    </div>
+  </div>
+
+  <!-- Waveform canvases -->
+  <div class="panel" style="padding:14px 16px;">
+    <div class="canvas-stack">
+      <div class="wave-row">
+        <span class="wave-label wl-1">Wave 1: A<sub>1</sub> cos(k<sub>1</sub>x &minus; &omega;<sub>1</sub>t)</span>
+        <canvas id="canvas1" height="110"></canvas>
+      </div>
+      <div class="wave-row">
+        <span class="wave-label wl-2">Wave 2: A<sub>2</sub> cos(k<sub>2</sub>x &minus; &omega;<sub>2</sub>t)</span>
+        <canvas id="canvas2" height="110"></canvas>
+      </div>
+      <div class="wave-row">
+        <span class="wave-label wl-sum">Sum: Wave 1 + Wave 2</span>
+        <canvas id="canvasSum" height="200"></canvas>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-swatch" style="background:#3b82f6;"></div> Wave 1</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#f59e0b;"></div> Wave 2</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#a78bfa;"></div> Sum</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:rgba(167,139,250,0.25); height:8px;"></div> Envelope</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#34d399;"></div> Phase velocity</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f472b6;"></div> Group velocity</div>
+    </div>
+  </div>
+
+  <p class="hint">
+    The <span style="color:#34d399;">green dot</span> rides a crest at the phase velocity v<sub>phase</sub> = &omega;<sub>avg</sub> / k<sub>avg</sub>.<br>
+    The <span style="color:#f472b6;">pink dot</span> rides the envelope peak at the group velocity v<sub>group</sub> = &Delta;&omega; / &Delta;k.<br>
+    Try making v<sub>group</sub> &gt; v<sub>phase</sub>, v<sub>group</sub> &lt; v<sub>phase</sub>, or even negative!
+  </p>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── DOM refs ──
+  const k1Input = document.getElementById('k1'), k1Slider = document.getElementById('k1s');
+  const w1Input = document.getElementById('w1'), w1Slider = document.getElementById('w1s');
+  const a1Input = document.getElementById('a1'), a1Slider = document.getElementById('a1s');
+  const k2Input = document.getElementById('k2'), k2Slider = document.getElementById('k2s');
+  const w2Input = document.getElementById('w2'), w2Slider = document.getElementById('w2s');
+  const a2Input = document.getElementById('a2'), a2Slider = document.getElementById('a2s');
+
+  const vp1El   = document.getElementById('vp1');
+  const vp2El   = document.getElementById('vp2');
+  const vpAvgEl = document.getElementById('vpAvg');
+  const vgEl    = document.getElementById('vg');
+  const dkEl    = document.getElementById('dk');
+  const dwEl    = document.getElementById('dw');
+  const eqBar   = document.getElementById('eqBar');
+
+  const btnPlay  = document.getElementById('btnPlay');
+  const btnPause = document.getElementById('btnPause');
+  const btnReset = document.getElementById('btnReset');
+  const speedSlider = document.getElementById('speedSlider');
+  const speedVal    = document.getElementById('speedVal');
+  const timeDisplay = document.getElementById('timeDisplay');
+
+  const canvas1   = document.getElementById('canvas1');
+  const canvas2   = document.getElementById('canvas2');
+  const canvasSum = document.getElementById('canvasSum');
+  const ctx1   = canvas1.getContext('2d');
+  const ctx2   = canvas2.getContext('2d');
+  const ctxS   = canvasSum.getContext('2d');
+
+  // Canvas sizing
+  const CW = 960;
+  const CH_SM = 110;
+  const CH_LG = 200;
+  canvas1.width = CW;   canvas1.height = CH_SM;
+  canvas2.width = CW;   canvas2.height = CH_SM;
+  canvasSum.width = CW;  canvasSum.height = CH_LG;
+
+  const PAD_L = 8, PAD_R = 8;
+
+  // ── State ──
+  let k1 = 5, w1 = 10, A1 = 1;
+  let k2 = 6, w2 = 14, A2 = 1;
+  let t = 0;
+  let playing = false;
+  let speed = 1;
+  let lastFrame = null;
+  let animId = null;
+
+  // Spatial range: show enough to see envelope beats
+  const X_MIN = 0;
+  function getXMax() {
+    const dk = Math.abs(k1 - k2);
+    // Show at least 2 envelope wavelengths, min 8 meters
+    if (dk > 0.01) return Math.max(8, 4 * Math.PI / dk);
+    return 8;
+  }
+
+  // ── Sync inputs ──
+  function syncParam(input, slider, setter) {
+    input.addEventListener('change', () => setter(parseFloat(input.value) || 0));
+    input.addEventListener('keydown', (e) => {
+      const step = parseFloat(input.step) || 0.1;
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setter(parseFloat(input.value) + step); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setter(parseFloat(input.value) - step); }
+    });
+    slider.addEventListener('input', () => setter(parseFloat(slider.value)));
+  }
+
+  function setK1(v) { k1 = Math.max(0.1, v); k1Input.value = +k1.toFixed(2); k1Slider.value = k1; update(); }
+  function setW1(v) { w1 = Math.max(0.1, v); w1Input.value = +w1.toFixed(2); w1Slider.value = w1; update(); }
+  function setA1(v) { A1 = Math.max(0.1, Math.min(2, v)); a1Input.value = +A1.toFixed(2); a1Slider.value = A1; update(); }
+  function setK2(v) { k2 = Math.max(0.1, v); k2Input.value = +k2.toFixed(2); k2Slider.value = k2; update(); }
+  function setW2(v) { w2 = Math.max(0.1, v); w2Input.value = +w2.toFixed(2); w2Slider.value = w2; update(); }
+  function setA2(v) { A2 = Math.max(0.1, Math.min(2, v)); a2Input.value = +A2.toFixed(2); a2Slider.value = A2; update(); }
+
+  syncParam(k1Input, k1Slider, setK1);
+  syncParam(w1Input, w1Slider, setW1);
+  syncParam(a1Input, a1Slider, setA1);
+  syncParam(k2Input, k2Slider, setK2);
+  syncParam(w2Input, w2Slider, setW2);
+  syncParam(a2Input, a2Slider, setA2);
+
+  // ── Derived quantities ──
+  function updateDerived() {
+    const vph1 = w1 / k1;
+    const vph2 = w2 / k2;
+    const kAvg = (k1 + k2) / 2;
+    const wAvg = (w1 + w2) / 2;
+    const vPhase = wAvg / kAvg;
+    const deltaK = k2 - k1;
+    const deltaW = w2 - w1;
+    const vGroup = deltaK !== 0 ? deltaW / deltaK : Infinity;
+
+    vp1El.textContent = vph1.toFixed(2);
+    vp2El.textContent = vph2.toFixed(2);
+    vpAvgEl.textContent = vPhase.toFixed(2);
+    dkEl.textContent = deltaK.toFixed(2);
+    dwEl.textContent = deltaW.toFixed(2);
+    vgEl.textContent = isFinite(vGroup) ? vGroup.toFixed(2) : '\u221E';
+
+    // Equation
+    eqBar.innerHTML =
+      `y = <span class="eq-highlight">${A1.toFixed(1)}</span> cos(${k1.toFixed(1)}x \u2212 ${w1.toFixed(1)}t)` +
+      ` + <span class="eq-highlight">${A2.toFixed(1)}</span> cos(${k2.toFixed(1)}x \u2212 ${w2.toFixed(1)}t)`;
+  }
+
+  // ── Drawing ──
+  function niceStep(range, target) {
+    const rough = range / target;
+    const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+    const res = rough / mag;
+    if (res <= 1.5) return mag;
+    if (res <= 3.5) return 2 * mag;
+    if (res <= 7.5) return 5 * mag;
+    return 10 * mag;
+  }
+
+  function drawWave(cvs, cctx, ch, waveFn, color, fillColor, extras) {
+    const plotW = CW - PAD_L - PAD_R;
+    const midY = ch / 2;
+    const xMax = getXMax();
+    // Max amplitude to normalize
+    const maxAmp = (extras && extras.maxAmp) || (A1 + A2);
+    const scale = (ch / 2 - 12) / Math.max(0.01, maxAmp);
+
+    cctx.clearRect(0, 0, CW, ch);
+    cctx.fillStyle = '#0a0c12';
+    cctx.fillRect(0, 0, CW, ch);
+
+    // Zero line
+    cctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    cctx.lineWidth = 1;
+    cctx.beginPath();
+    cctx.moveTo(PAD_L, midY);
+    cctx.lineTo(PAD_L + plotW, midY);
+    cctx.stroke();
+
+    // X grid
+    const xStep = niceStep(xMax - X_MIN, 8);
+    cctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    for (let xv = xStep; xv < xMax; xv += xStep) {
+      const px = PAD_L + ((xv - X_MIN) / (xMax - X_MIN)) * plotW;
+      cctx.beginPath(); cctx.moveTo(px, 0); cctx.lineTo(px, ch); cctx.stroke();
+    }
+
+    // Envelope (if provided)
+    if (extras && extras.envelope) {
+      const envFn = extras.envelope;
+      cctx.beginPath();
+      for (let px = 0; px <= plotW; px++) {
+        const x = X_MIN + (px / plotW) * (xMax - X_MIN);
+        const y = midY - envFn(x, t) * scale;
+        if (px === 0) cctx.moveTo(PAD_L, y); else cctx.lineTo(PAD_L + px, y);
+      }
+      for (let px = plotW; px >= 0; px--) {
+        const x = X_MIN + (px / plotW) * (xMax - X_MIN);
+        const y = midY + envFn(x, t) * scale;
+        cctx.lineTo(PAD_L + px, y);
+      }
+      cctx.closePath();
+      cctx.fillStyle = 'rgba(167,139,250,0.10)';
+      cctx.fill();
+
+      // Dashed envelope lines
+      cctx.strokeStyle = 'rgba(167,139,250,0.3)';
+      cctx.lineWidth = 1;
+      cctx.setLineDash([4, 4]);
+      for (const sign of [1, -1]) {
+        cctx.beginPath();
+        for (let px = 0; px <= plotW; px++) {
+          const x = X_MIN + (px / plotW) * (xMax - X_MIN);
+          const y = midY - sign * envFn(x, t) * scale;
+          if (px === 0) cctx.moveTo(PAD_L, y); else cctx.lineTo(PAD_L + px, y);
+        }
+        cctx.stroke();
+      }
+      cctx.setLineDash([]);
+    }
+
+    // Main waveform
+    cctx.beginPath();
+    for (let px = 0; px <= plotW; px++) {
+      const x = X_MIN + (px / plotW) * (xMax - X_MIN);
+      const val = waveFn(x, t);
+      const y = midY - val * scale;
+      if (px === 0) cctx.moveTo(PAD_L, y); else cctx.lineTo(PAD_L + px, y);
+    }
+    cctx.strokeStyle = color;
+    cctx.lineWidth = 1.8;
+    cctx.stroke();
+
+    // Subtle fill
+    cctx.lineTo(PAD_L + plotW, midY);
+    cctx.lineTo(PAD_L, midY);
+    cctx.closePath();
+    cctx.fillStyle = fillColor;
+    cctx.fill();
+
+    // ── Dots (phase & group velocity) ──
+    if (extras && extras.dots) {
+      for (const dot of extras.dots) {
+        const xPos = dot.x0 + dot.v * t;
+        // Wrap into visible range
+        const range = xMax - X_MIN;
+        let xWrapped = ((xPos - X_MIN) % range + range) % range + X_MIN;
+        const px = PAD_L + ((xWrapped - X_MIN) / range) * plotW;
+        const val = waveFn(xWrapped, t);
+        const y = midY - val * scale;
+
+        // Glow
+        cctx.beginPath();
+        cctx.arc(px, y, 10, 0, 2 * Math.PI);
+        cctx.fillStyle = dot.color.replace('1)', '0.25)');
+        cctx.fill();
+
+        // Dot
+        cctx.beginPath();
+        cctx.arc(px, y, 5, 0, 2 * Math.PI);
+        cctx.fillStyle = dot.color;
+        cctx.fill();
+        cctx.strokeStyle = '#fff';
+        cctx.lineWidth = 1.2;
+        cctx.stroke();
+      }
+    }
+
+    // X-axis labels
+    cctx.fillStyle = 'rgba(255,255,255,0.3)';
+    cctx.font = '9px system-ui, sans-serif';
+    cctx.textAlign = 'center';
+    for (let xv = xStep; xv < xMax; xv += xStep) {
+      const px = PAD_L + ((xv - X_MIN) / (xMax - X_MIN)) * plotW;
+      if (px > PAD_L + plotW - 20) continue;
+      cctx.fillText(xv.toFixed(1), px, ch - 3);
+    }
+    cctx.fillText('m', PAD_L + plotW, ch - 3);
+  }
+
+  function drawAll() {
+    const xMax = getXMax();
+    const kAvg = (k1 + k2) / 2;
+    const wAvg = (w1 + w2) / 2;
+    const dk = k2 - k1;
+    const dw = w2 - w1;
+    const vPhase = wAvg / kAvg;
+    const vGroup = dk !== 0 ? dw / dk : 0;
+
+    const wave1 = (x, t) => A1 * Math.cos(k1 * x - w1 * t);
+    const wave2 = (x, t) => A2 * Math.cos(k2 * x - w2 * t);
+    const waveSum = (x, t) => wave1(x, t) + wave2(x, t);
+
+    // Envelope for equal-amplitude case: 2A|cos(dk/2 * x - dw/2 * t)|
+    // For unequal amplitudes, approximate
+    const envFn = (x, t) => {
+      if (A1 === A2) {
+        return 2 * A1 * Math.abs(Math.cos(dk / 2 * x - dw / 2 * t));
+      }
+      // General envelope approximation
+      return Math.sqrt(A1 * A1 + A2 * A2 + 2 * A1 * A2 * Math.cos(dk * x - dw * t));
+    };
+
+    // Draw individual waves
+    drawWave(canvas1, ctx1, CH_SM, wave1, '#3b82f6', 'rgba(59,130,246,0.06)', { maxAmp: Math.max(A1, A2) });
+    drawWave(canvas2, ctx2, CH_SM, wave2, '#f59e0b', 'rgba(245,158,11,0.06)', { maxAmp: Math.max(A1, A2) });
+
+    // Draw sum with envelope and dots
+    drawWave(canvasSum, ctxS, CH_LG, waveSum, '#a78bfa', 'rgba(167,139,250,0.05)', {
+      maxAmp: A1 + A2,
+      envelope: envFn,
+      dots: [
+        { v: vPhase, x0: 0, color: 'rgba(52,211,153,1)' },  // phase vel - green
+        { v: vGroup, x0: 0, color: 'rgba(244,114,182,1)' },  // group vel - pink
+      ],
+    });
+  }
+
+  // ── Update everything ──
+  function update() {
+    updateDerived();
+    drawAll();
+  }
+
+  // ── Playback ──
+  function animLoop(ts) {
+    if (!playing) return;
+    if (lastFrame === null) lastFrame = ts;
+    const dt = (ts - lastFrame) / 1000; // seconds
+    lastFrame = ts;
+    t += dt * speed;
+    timeDisplay.textContent = t.toFixed(2);
+    drawAll();
+    animId = requestAnimationFrame(animLoop);
+  }
+
+  btnPlay.addEventListener('click', () => {
+    if (playing) return;
+    playing = true;
+    lastFrame = null;
+    btnPause.disabled = false;
+    btnPlay.disabled = true;
+    animId = requestAnimationFrame(animLoop);
+  });
+
+  btnPause.addEventListener('click', () => {
+    playing = false;
+    btnPause.disabled = true;
+    btnPlay.disabled = false;
+    if (animId) cancelAnimationFrame(animId);
+  });
+
+  btnReset.addEventListener('click', () => {
+    t = 0;
+    timeDisplay.textContent = '0.00';
+    drawAll();
+  });
+
+  speedSlider.addEventListener('input', () => {
+    speed = parseFloat(speedSlider.value);
+    speedVal.textContent = speed.toFixed(1) + 'x';
+  });
+
+  // ── Initial draw ──
+  update();
+})();
+</script>
+
+</body>
+</html>
