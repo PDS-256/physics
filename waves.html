@@ -128,7 +128,6 @@
     .derived-label {
       font-size: 0.68rem;
       color: #666;
-      text-transform: uppercase;
       letter-spacing: 0.05em;
       margin-bottom: 2px;
     }
@@ -196,6 +195,10 @@
     .time-display strong {
       color: #aaa;
       font-weight: 600;
+      font-family: 'Consolas', 'SF Mono', 'Menlo', monospace;
+      display: inline-block;
+      min-width: 48px;
+      text-align: right;
     }
 
     /* ── Canvases ── */
@@ -276,6 +279,7 @@
       line-height: 1.6;
     }
     .equation-bar .eq-highlight { color: #f0f0f0; font-weight: 600; }
+    .equation-bar .eq-fn { font-style: normal; }
   </style>
 </head>
 <body>
@@ -342,27 +346,27 @@
     <div class="equation-bar" id="eqBar"></div>
     <div class="derived">
       <div class="derived-item">
-        <div class="derived-label">v<sub>phase,1</sub> = &omega;<sub>1</sub>/k<sub>1</sub></div>
+        <div class="derived-label"><i>v</i><sub>phase,1</sub> = <i>&omega;</i><sub>1</sub>/<i>k</i><sub>1</sub></div>
         <div class="derived-value dv-generic" id="vp1">2.00</div>
       </div>
       <div class="derived-item">
-        <div class="derived-label">v<sub>phase,2</sub> = &omega;<sub>2</sub>/k<sub>2</sub></div>
+        <div class="derived-label"><i>v</i><sub>phase,2</sub> = <i>&omega;</i><sub>2</sub>/<i>k</i><sub>2</sub></div>
         <div class="derived-value dv-generic" id="vp2">2.33</div>
       </div>
       <div class="derived-item">
-        <div class="derived-label">v<sub>phase</sub> = &omega;<sub>avg</sub>/k<sub>avg</sub></div>
+        <div class="derived-label"><i>v</i><sub>phase</sub> = <i>&omega;</i><sub>avg</sub>/<i>k</i><sub>avg</sub></div>
         <div class="derived-value dv-phase" id="vpAvg">2.18</div>
       </div>
       <div class="derived-item">
-        <div class="derived-label">v<sub>group</sub> = &Delta;&omega;/&Delta;k</div>
+        <div class="derived-label"><i>v</i><sub>group</sub> = &Delta;<i>&omega;</i>/&Delta;<i>k</i></div>
         <div class="derived-value dv-group" id="vg">4.00</div>
       </div>
       <div class="derived-item">
-        <div class="derived-label">&Delta;k</div>
+        <div class="derived-label">&Delta;<i>k</i></div>
         <div class="derived-value dv-generic" id="dk">1.00</div>
       </div>
       <div class="derived-item">
-        <div class="derived-label">&Delta;&omega;</div>
+        <div class="derived-label">&Delta;<i>&omega;</i></div>
         <div class="derived-value dv-generic" id="dw">4.00</div>
       </div>
     </div>
@@ -391,11 +395,11 @@
   <div class="panel" style="padding:14px 16px;">
     <div class="canvas-stack">
       <div class="wave-row">
-        <span class="wave-label wl-1">Wave 1: A<sub>1</sub> cos(k<sub>1</sub>x &minus; &omega;<sub>1</sub>t)</span>
+        <span class="wave-label wl-1">Wave 1: <i>A</i><sub>1</sub> cos(<i>k</i><sub>1</sub><i>x</i> &minus; <i>&omega;</i><sub>1</sub><i>t</i>)</span>
         <canvas id="canvas1" height="110"></canvas>
       </div>
       <div class="wave-row">
-        <span class="wave-label wl-2">Wave 2: A<sub>2</sub> cos(k<sub>2</sub>x &minus; &omega;<sub>2</sub>t)</span>
+        <span class="wave-label wl-2">Wave 2: <i>A</i><sub>2</sub> cos(<i>k</i><sub>2</sub><i>x</i> &minus; <i>&omega;</i><sub>2</sub><i>t</i>)</span>
         <canvas id="canvas2" height="110"></canvas>
       </div>
       <div class="wave-row">
@@ -415,9 +419,9 @@
   </div>
 
   <p class="hint">
-    The <span style="color:#34d399;">green dot</span> rides a crest at the phase velocity v<sub>phase</sub> = &omega;<sub>avg</sub> / k<sub>avg</sub>.<br>
-    The <span style="color:#f472b6;">pink dot</span> rides the envelope peak at the group velocity v<sub>group</sub> = &Delta;&omega; / &Delta;k.<br>
-    Try making v<sub>group</sub> &gt; v<sub>phase</sub>, v<sub>group</sub> &lt; v<sub>phase</sub>, or even negative!
+    The <span style="color:#34d399;">green dot</span> rides a crest at the phase velocity <i>v</i><sub>phase</sub> = <i>&omega;</i><sub>avg</sub> / <i>k</i><sub>avg</sub>.<br>
+    The <span style="color:#f472b6;">pink dot</span> rides the envelope peak at the group velocity <i>v</i><sub>group</sub> = &Delta;<i>&omega;</i> / &Delta;<i>k</i>.<br>
+    Try making <i>v</i><sub>group</sub> &gt; <i>v</i><sub>phase</sub>, <i>v</i><sub>group</sub> &lt; <i>v</i><sub>phase</sub>, or even negative!
   </p>
 
 <script>
@@ -527,8 +531,8 @@
 
     // Equation
     eqBar.innerHTML =
-      `y = <span class="eq-highlight">${A1.toFixed(1)}</span> cos(${k1.toFixed(1)}x \u2212 ${w1.toFixed(1)}t)` +
-      ` + <span class="eq-highlight">${A2.toFixed(1)}</span> cos(${k2.toFixed(1)}x \u2212 ${w2.toFixed(1)}t)`;
+      `y = <span class="eq-highlight">${A1.toFixed(1)}</span> <span class="eq-fn">cos</span>(${k1.toFixed(1)}x \u2212 ${w1.toFixed(1)}t)` +
+      ` + <span class="eq-highlight">${A2.toFixed(1)}</span> <span class="eq-fn">cos</span>(${k2.toFixed(1)}x \u2212 ${w2.toFixed(1)}t)`;
   }
 
   // ── Drawing ──
