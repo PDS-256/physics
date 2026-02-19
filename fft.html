@@ -648,6 +648,11 @@
     }
   }
 
+  // ── Canvas px → CSS px (accounts for CSS scaling when window < 960px) ──
+  function toCssX(canvasX) {
+    return canvasX / WIDTH * wrapper.getBoundingClientRect().width;
+  }
+
   // ── Marker lines (vertical) ──
   function addMarker(freq) {
     const id = nextMarkerId++;
@@ -655,7 +660,7 @@
 
     const lineEl = document.createElement('div');
     lineEl.className = 'marker-line';
-    lineEl.style.left = x + 'px';
+    lineEl.style.left = toCssX(x) + 'px';
 
     // Drag handle at bottom with left/right arrows
     const handleEl = document.createElement('div');
@@ -703,7 +708,7 @@
   function repositionMarkers() {
     for (const m of markers) {
       const x = freqToX(m.freq);
-      m.el.style.left = x + 'px';
+      m.el.style.left = toCssX(x) + 'px';
       m.el.querySelector('.marker-freq-text').textContent = formatFreq(m.freq);
     }
     staggerLabels();
@@ -745,7 +750,7 @@
       x = Math.max(PAD_LEFT, Math.min(PAD_LEFT + PLOT_W, x));
 
       marker.freq = xToFreq(x);
-      marker.el.style.left = x + 'px';
+      marker.el.style.left = toCssX(x) + 'px';
       marker.el.querySelector('.marker-freq-text').textContent = formatFreq(marker.freq);
       staggerLabels();
     }
@@ -771,6 +776,9 @@
       addMarker(freq);
     }
   });
+
+  // Reposition markers when window is resized (CSS scale changes)
+  window.addEventListener('resize', repositionMarkers);
 
   // ── Draw empty chart on load ──
   function drawEmpty() {

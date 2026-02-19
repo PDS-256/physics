@@ -466,6 +466,11 @@
     }
   })();
 
+  // ── Canvas px → CSS px (accounts for CSS scaling when window < 960px) ──
+  function toCssY(canvasY) {
+    return canvasY / HEIGHT * wrapper.getBoundingClientRect().height;
+  }
+
   // ── Frequency ↔ Y mapping ──
   function freqToY(freq) {
     if (logScale) {
@@ -509,7 +514,7 @@
       if (y < 5 || y > HEIGHT - 5) continue;
       const el = document.createElement('div');
       el.className = 'freq-tick';
-      el.style.top = y + 'px';
+      el.style.top = toCssY(y) + 'px';
       el.textContent = f >= 1000 ? (f / 1000) + 'k' : f + '';
       freqAxisEl.appendChild(el);
     }
@@ -720,7 +725,7 @@
 
     const lineEl = document.createElement('div');
     lineEl.className = 'marker-line';
-    lineEl.style.top = y + 'px';
+    lineEl.style.top = toCssY(y) + 'px';
 
     // Drag handle on left side with up/down arrows
     const handleEl = document.createElement('div');
@@ -760,7 +765,7 @@
   function repositionMarkers() {
     for (const m of markers) {
       const y = freqToY(m.freq);
-      m.el.style.top = y + 'px';
+      m.el.style.top = toCssY(y) + 'px';
       m.el.querySelector('.marker-freq-text').textContent = formatFreq(m.freq);
     }
   }
@@ -797,11 +802,13 @@
       e.preventDefault();
       const rect = wrapper.getBoundingClientRect();
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      let y = clientY - rect.top;
-      y = Math.max(0, Math.min(HEIGHT, y));
+      const scaleY = HEIGHT / rect.height;
+      let cssY = clientY - rect.top;
+      cssY = Math.max(0, Math.min(rect.height, cssY));
+      const canvasY = cssY * scaleY;
 
-      marker.freq = yToFreq(y);
-      marker.el.style.top = y + 'px';
+      marker.freq = yToFreq(canvasY);
+      marker.el.style.top = cssY + 'px';
       marker.el.querySelector('.marker-freq-text').textContent = formatFreq(marker.freq);
     }
 
@@ -817,13 +824,17 @@
   // Click on canvas to add marker
   wrapper.addEventListener('click', (e) => {
     if (e.target.closest('.marker-label')) return;
-    const rect = wrapper.getBoundingClientRect();
-    const y    = e.clientY - rect.top;
-    const freq = yToFreq(y);
+    const rect   = wrapper.getBoundingClientRect();
+    const scaleY = HEIGHT / rect.height;
+    const canvasY = (e.clientY - rect.top) * scaleY;
+    const freq = yToFreq(canvasY);
     if (freq > 0 && freq <= maxFreq) {
       addMarker(freq);
     }
   });
+
+  // Reposition markers and axis ticks when window is resized
+  window.addEventListener('resize', () => { repositionMarkers(); updateFreqAxis(); });
 
   // ── Init ──
   updateFreqAxis();
