@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lissajous Explorer — Physics of Sound</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0f1117;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 60px;
+    }
+
+    h1 { font-size: 1.6rem; font-weight: 600; margin-bottom: 4px; color: #f0f0f0; }
+    .subtitle { font-size: 0.85rem; color: #888; margin-bottom: 20px; text-align: center; }
+
+    /* ── Panels ── */
+    .panel {
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 10px;
+      padding: 16px 20px;
+      max-width: 700px;
+      width: 100%;
+      margin-bottom: 12px;
+    }
+
+    /* ── Channel rows ── */
+    .channel-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .channel-row + .channel-row { margin-top: 10px; }
+
+    .ch-toggle {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      border: 2px solid #444;
+      background: #222;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .ch-toggle.ch-x { color: #555; }
+    .ch-toggle.ch-y { color: #555; }
+    .ch-toggle.ch-x.active { background: #064e3b; border-color: #34d399; color: #34d399; box-shadow: 0 0 8px rgba(52,211,153,0.3); }
+    .ch-toggle.ch-y.active { background: #1e3a5f; border-color: #60a5fa; color: #60a5fa; box-shadow: 0 0 8px rgba(96,165,250,0.3); }
+
+    .ch-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      min-width: 12px;
+    }
+    .ch-label-x { color: #34d399; }
+    .ch-label-y { color: #60a5fa; }
+
+    .main-slider {
+      width: 160px;
+      cursor: pointer;
+    }
+    .main-slider.sl-x { accent-color: #34d399; }
+    .main-slider.sl-y { accent-color: #60a5fa; }
+
+    .freq-input {
+      width: 64px;
+      background: #111319;
+      border: 1px solid #333;
+      border-radius: 5px;
+      color: #f0f0f0;
+      font-family: 'Consolas', 'SF Mono', monospace;
+      font-size: 0.85rem;
+      padding: 4px 6px;
+      text-align: center;
+    }
+    .freq-input:focus { border-color: #666; outline: none; }
+    .freq-input.fi-x:focus { border-color: #34d399; }
+    .freq-input.fi-y:focus { border-color: #60a5fa; }
+    .hz-suffix {
+      font-size: 0.75rem;
+      color: #666;
+    }
+
+    .fine-label {
+      font-size: 0.68rem;
+      color: #666;
+      margin-left: 4px;
+    }
+    .fine-slider {
+      width: 70px;
+      cursor: pointer;
+    }
+    .fine-slider.fn-x { accent-color: #2dd4a0; }
+    .fine-slider.fn-y { accent-color: #508fd8; }
+    .fine-val {
+      font-size: 0.72rem;
+      font-family: 'Consolas', monospace;
+      color: #888;
+      min-width: 32px;
+    }
+
+    /* ── Toolbar row ── */
+    .toolbar-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+      justify-content: center;
+    }
+    .tool-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tool-label {
+      font-size: 0.75rem;
+      color: #888;
+      white-space: nowrap;
+    }
+
+    .ratio-input {
+      width: 70px;
+      background: #111319;
+      border: 1px solid #444;
+      border-radius: 5px;
+      color: #f0f0f0;
+      font-family: 'Consolas', 'SF Mono', monospace;
+      font-size: 0.9rem;
+      font-weight: 700;
+      padding: 4px 6px;
+      text-align: center;
+    }
+    .ratio-input:focus { border-color: #f59e0b; outline: none; }
+
+    .btn {
+      border: none;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.96); }
+
+    .btn-sound { background: #7c3aed; color: #fff; }
+    .btn-sound:hover { background: #6d28d9; }
+    .btn-sound.active { background: #ef4444; }
+    .btn-sound.active:hover { background: #dc2626; }
+
+    .btn-detune { background: #374151; color: #ccc; }
+    .btn-detune:hover { background: #4b5563; }
+    .btn-detune.active { background: #f59e0b; color: #111; }
+    .btn-detune.active:hover { background: #d97706; }
+
+    .trail-slider {
+      width: 80px;
+      cursor: pointer;
+      accent-color: #a78bfa;
+    }
+    .trail-val {
+      font-size: 0.72rem;
+      font-family: 'Consolas', monospace;
+      color: #888;
+      min-width: 20px;
+    }
+
+    /* ── Oscilloscope ── */
+    .scope-wrap {
+      display: flex;
+      justify-content: center;
+      max-width: 700px;
+      width: 100%;
+    }
+    .scope-bezel {
+      background: #0a0e08;
+      border: 3px solid #2a2d1a;
+      border-radius: 12px;
+      padding: 8px;
+      box-shadow:
+        inset 0 0 30px rgba(0,20,0,0.5),
+        0 0 20px rgba(0,40,0,0.15);
+      display: inline-block;
+    }
+    #scope {
+      display: block;
+      border-radius: 6px;
+      background: #050a04;
+    }
+
+    .hint {
+      font-size: 0.75rem;
+      color: #555;
+      margin-top: 12px;
+      text-align: center;
+      line-height: 1.5;
+      max-width: 650px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Lissajous Explorer</h1>
+  <p class="subtitle">Physics of Sound &mdash; Watch a dot trace frequency ratios in slow motion</p>
+
+  <!-- Channel controls -->
+  <div class="panel">
+    <!-- X channel -->
+    <div class="channel-row">
+      <button class="ch-toggle ch-x active" id="chXBtn" title="Toggle X axis">X</button>
+      <input type="range" class="main-slider sl-x" id="fxSlider" min="100" max="500" value="200" step="10">
+      <input type="text" class="freq-input fi-x" id="fxInput" value="200">
+      <span class="hz-suffix">Hz</span>
+      <span class="fine-label">fine</span>
+      <input type="range" class="fine-slider fn-x" id="fxFine" min="-5" max="5" value="0" step="1">
+      <span class="fine-val" id="fxFineVal">+0</span>
+    </div>
+    <!-- Y channel -->
+    <div class="channel-row">
+      <button class="ch-toggle ch-y active" id="chYBtn" title="Toggle Y axis">Y</button>
+      <input type="range" class="main-slider sl-y" id="fySlider" min="100" max="500" value="300" step="10">
+      <input type="text" class="freq-input fi-y" id="fyInput" value="300">
+      <span class="hz-suffix">Hz</span>
+      <span class="fine-label">fine</span>
+      <input type="range" class="fine-slider fn-y" id="fyFine" min="-5" max="5" value="0" step="1">
+      <span class="fine-val" id="fyFineVal">+0</span>
+    </div>
+  </div>
+
+  <!-- Toolbar: ratio, sound, trail, detune -->
+  <div class="panel">
+    <div class="toolbar-row">
+      <div class="tool-group">
+        <span class="tool-label" style="color:#f59e0b; font-weight:700;">R =</span>
+        <input type="text" class="ratio-input" id="ratioInput" value="1.5000" title="Type a ratio (max 5) and press Enter">
+      </div>
+
+      <button class="btn btn-sound" id="btnSound">&#9835; Sound</button>
+
+      <div class="tool-group">
+        <span class="tool-label">Trail</span>
+        <input type="range" class="trail-slider" id="trailSlider" min="1" max="600" value="200" step="1">
+        <span class="trail-val" id="trailVal">200</span>
+      </div>
+
+      <button class="btn btn-detune" id="btnDetune">Detune</button>
+    </div>
+  </div>
+
+  <!-- Scope -->
+  <div class="scope-wrap">
+    <div class="scope-bezel">
+      <canvas id="scope" width="540" height="540"></canvas>
+    </div>
+  </div>
+
+  <p class="hint">
+    Toggle X and Y to watch the dot move along each axis alone, or both for the full Lissajous figure.
+    Adjust the ratio R to lock frequencies to an exact interval. Fine-tune sliders shift by &plusmn;5 Hz.
+    Press Detune to nudge the Y frequency slightly and watch the pattern drift.
+  </p>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── DOM ──
+  const chXBtn      = document.getElementById('chXBtn');
+  const chYBtn      = document.getElementById('chYBtn');
+  const fxSlider    = document.getElementById('fxSlider');
+  const fySlider    = document.getElementById('fySlider');
+  const fxInput     = document.getElementById('fxInput');
+  const fyInput     = document.getElementById('fyInput');
+  const fxFine      = document.getElementById('fxFine');
+  const fyFine      = document.getElementById('fyFine');
+  const fxFineVal   = document.getElementById('fxFineVal');
+  const fyFineVal   = document.getElementById('fyFineVal');
+  const ratioInput  = document.getElementById('ratioInput');
+  const btnSound    = document.getElementById('btnSound');
+  const trailSlider = document.getElementById('trailSlider');
+  const trailVal    = document.getElementById('trailVal');
+  const btnDetune   = document.getElementById('btnDetune');
+
+  const canvas = document.getElementById('scope');
+  const ctx    = canvas.getContext('2d');
+  const S      = canvas.width;    // 540
+  const PAD    = 40;
+  const PLOT   = S - 2 * PAD;
+
+  // ── State ──
+  let fxMain = 200, fyMain = 300;
+  let fxFineHz = 0, fyFineHz = 0;
+  let xOn = true, yOn = true;
+  let detuned = false;
+  const DETUNE_HZ = 1.5;
+  let trailLen = 200;
+
+  // Trail buffer (ring buffer of {x, y} in canvas coords)
+  const MAX_TRAIL = 600;
+  let trail = [];
+
+  // Animation time (slow motion)
+  // We scale real frequencies down so 100 Hz ≈ 0.25 visual Hz
+  const VIS_SCALE = 0.0025;
+  let t = 0;
+  let lastTs = null;
+  let animId = null;
+
+  // ── Derived frequencies ──
+  function getFx() { return fxMain + fxFineHz; }
+  function getFy() { return fyMain + fyFineHz + (detuned ? DETUNE_HZ : 0); }
+
+  // ── Clamp helper ──
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  // ── Update ratio display (higher / lower) ──
+  function updateRatioDisplay() {
+    const fx = getFx(), fy = getFy();
+    const hi = Math.max(fx, fy);
+    const lo = Math.min(fx, fy);
+    const r = lo > 0 ? hi / lo : 1;
+    ratioInput.value = r.toFixed(4);
+  }
+
+  // ── Sync all displays ──
+  function syncDisplays() {
+    fxInput.value = getFx();
+    fyInput.value = getFy();
+    fxSlider.value = fxMain;
+    fySlider.value = fyMain;
+    fxFine.value = fxFineHz;
+    fyFine.value = fyFineHz;
+    fxFineVal.textContent = (fxFineHz >= 0 ? '+' : '') + fxFineHz;
+    fyFineVal.textContent = (fyFineHz >= 0 ? '+' : '') + fyFineHz;
+    trailVal.textContent = trailLen;
+    updateRatioDisplay();
+    updateSound();
+  }
+
+  // ── Clear trail on frequency change ──
+  function resetTrail() {
+    trail = [];
+  }
+
+  // ── Channel toggles ──
+  chXBtn.addEventListener('click', () => {
+    xOn = !xOn;
+    chXBtn.classList.toggle('active', xOn);
+    resetTrail();
+  });
+  chYBtn.addEventListener('click', () => {
+    yOn = !yOn;
+    chYBtn.classList.toggle('active', yOn);
+    resetTrail();
+  });
+
+  // ── Main sliders ──
+  fxSlider.addEventListener('input', () => {
+    fxMain = parseInt(fxSlider.value, 10);
+    resetTrail();
+    syncDisplays();
+  });
+  fySlider.addEventListener('input', () => {
+    fyMain = parseInt(fySlider.value, 10);
+    resetTrail();
+    syncDisplays();
+  });
+
+  // ── Frequency text inputs ──
+  function commitFxInput() {
+    let v = parseFloat(fxInput.value);
+    if (isNaN(v)) v = fxMain;
+    v = clamp(Math.round(v), 100, 500);
+    // Split into main (nearest 10) + fine
+    fxMain = clamp(Math.round(v / 10) * 10, 100, 500);
+    fxFineHz = clamp(v - fxMain, -5, 5);
+    resetTrail();
+    syncDisplays();
+  }
+  function commitFyInput() {
+    let v = parseFloat(fyInput.value);
+    if (isNaN(v)) v = fyMain;
+    v = clamp(Math.round(v), 100, 500);
+    fyMain = clamp(Math.round(v / 10) * 10, 100, 500);
+    fyFineHz = clamp(v - fyMain, -5, 5);
+    resetTrail();
+    syncDisplays();
+  }
+  fxInput.addEventListener('change', commitFxInput);
+  fxInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { commitFxInput(); fxInput.blur(); }});
+  fyInput.addEventListener('change', commitFyInput);
+  fyInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { commitFyInput(); fyInput.blur(); }});
+
+  // ── Fine tune sliders ──
+  fxFine.addEventListener('input', () => {
+    fxFineHz = parseInt(fxFine.value, 10);
+    resetTrail();
+    syncDisplays();
+  });
+  fyFine.addEventListener('input', () => {
+    fyFineHz = parseInt(fyFine.value, 10);
+    resetTrail();
+    syncDisplays();
+  });
+
+  // ── Ratio input ──
+  function commitRatio() {
+    let r = parseFloat(ratioInput.value);
+    if (isNaN(r) || r <= 0) { updateRatioDisplay(); return; }
+    r = clamp(r, 1, 5);
+
+    // Keep the lower frequency fixed, adjust the higher one
+    const fx = getFx(), fy = getFy();
+    const lo = Math.min(fx, fy);
+    let newHi = lo * r;
+
+    if (newHi > 500) {
+      // Scale down: set lower = 500/r, higher = 500
+      const newLo = Math.round(500 / r);
+      newHi = 500;
+      if (fx <= fy) {
+        fxMain = clamp(Math.round(newLo / 10) * 10, 100, 500);
+        fxFineHz = clamp(newLo - fxMain, -5, 5);
+        fyMain = clamp(Math.round(newHi / 10) * 10, 100, 500);
+        fyFineHz = clamp(Math.round(newHi) - fyMain, -5, 5);
+      } else {
+        fyMain = clamp(Math.round(newLo / 10) * 10, 100, 500);
+        fyFineHz = clamp(newLo - fyMain, -5, 5);
+        fxMain = clamp(Math.round(newHi / 10) * 10, 100, 500);
+        fxFineHz = clamp(Math.round(newHi) - fxMain, -5, 5);
+      }
+    } else if (newHi < 100) {
+      // Shouldn't happen with r >= 1, but handle gracefully
+      newHi = 100;
+      if (fx <= fy) {
+        fyMain = 100; fyFineHz = 0;
+      } else {
+        fxMain = 100; fxFineHz = 0;
+      }
+    } else {
+      newHi = Math.round(newHi);
+      if (fx <= fy) {
+        fyMain = clamp(Math.round(newHi / 10) * 10, 100, 500);
+        fyFineHz = clamp(newHi - fyMain, -5, 5);
+      } else {
+        fxMain = clamp(Math.round(newHi / 10) * 10, 100, 500);
+        fxFineHz = clamp(newHi - fxMain, -5, 5);
+      }
+    }
+
+    resetTrail();
+    syncDisplays();
+  }
+  ratioInput.addEventListener('change', commitRatio);
+  ratioInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { commitRatio(); ratioInput.blur(); }});
+
+  // ── Trail slider ──
+  trailSlider.addEventListener('input', () => {
+    trailLen = parseInt(trailSlider.value, 10);
+    trailVal.textContent = trailLen;
+  });
+
+  // ── Detune button ──
+  btnDetune.addEventListener('click', () => {
+    detuned = !detuned;
+    btnDetune.classList.toggle('active', detuned);
+    btnDetune.textContent = detuned ? 'Detuned +' + DETUNE_HZ + ' Hz' : 'Detune';
+    resetTrail();
+    syncDisplays();
+  });
+
+  // ── Sound (Web Audio) ──
+  let audioCtx = null;
+  let soundPlaying = false;
+  let soundNodes = null;
+  const VOLUME = 0.12;
+
+  function startSoundEngine() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const now = audioCtx.currentTime;
+    const master = audioCtx.createGain();
+    master.gain.setValueAtTime(0, now);
+    master.gain.linearRampToValueAtTime(VOLUME, now + 0.06);
+    master.connect(audioCtx.destination);
+
+    const oscX = audioCtx.createOscillator();
+    const gainX = audioCtx.createGain();
+    oscX.type = 'sine';
+    oscX.frequency.setValueAtTime(getFx(), now);
+    gainX.gain.setValueAtTime(xOn ? 0.5 : 0, now);
+    oscX.connect(gainX).connect(master);
+
+    const oscY = audioCtx.createOscillator();
+    const gainY = audioCtx.createGain();
+    oscY.type = 'sine';
+    oscY.frequency.setValueAtTime(getFy(), now);
+    gainY.gain.setValueAtTime(yOn ? 0.5 : 0, now);
+    oscY.connect(gainY).connect(master);
+
+    oscX.start(now);
+    oscY.start(now);
+
+    soundNodes = { oscX, oscY, gainX, gainY, master };
+    soundPlaying = true;
+    btnSound.classList.add('active');
+    btnSound.innerHTML = '&#9724; Stop';
+  }
+
+  function stopSoundEngine() {
+    if (soundNodes) {
+      const now = audioCtx.currentTime;
+      soundNodes.master.gain.linearRampToValueAtTime(0, now + 0.06);
+      const nodes = soundNodes;
+      setTimeout(() => {
+        nodes.oscX.stop(); nodes.oscY.stop();
+        nodes.oscX.disconnect(); nodes.oscY.disconnect();
+        nodes.master.disconnect();
+      }, 100);
+      soundNodes = null;
+    }
+    soundPlaying = false;
+    btnSound.classList.remove('active');
+    btnSound.innerHTML = '&#9835; Sound';
+  }
+
+  function updateSound() {
+    if (!soundPlaying || !soundNodes) return;
+    const now = audioCtx.currentTime;
+    soundNodes.oscX.frequency.linearRampToValueAtTime(getFx(), now + 0.04);
+    soundNodes.oscY.frequency.linearRampToValueAtTime(getFy(), now + 0.04);
+    soundNodes.gainX.gain.linearRampToValueAtTime(xOn ? 0.5 : 0, now + 0.04);
+    soundNodes.gainY.gain.linearRampToValueAtTime(yOn ? 0.5 : 0, now + 0.04);
+  }
+
+  btnSound.addEventListener('click', () => {
+    if (soundPlaying) stopSoundEngine(); else startSoundEngine();
+  });
+
+  // ── Drawing ──
+  function drawGrid() {
+    ctx.fillStyle = '#050a04';
+    ctx.fillRect(0, 0, S, S);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(0,255,60,0.06)';
+    ctx.lineWidth = 1;
+    const n = 10;
+    for (let i = 0; i <= n; i++) {
+      const p = PAD + (i / n) * PLOT;
+      ctx.beginPath(); ctx.moveTo(p, PAD); ctx.lineTo(p, PAD + PLOT); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(PAD, p); ctx.lineTo(PAD + PLOT, p); ctx.stroke();
+    }
+
+    // Center cross
+    ctx.strokeStyle = 'rgba(0,255,60,0.12)';
+    const c = PAD + PLOT / 2;
+    ctx.beginPath(); ctx.moveTo(c, PAD); ctx.lineTo(c, PAD + PLOT); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PAD, c); ctx.lineTo(PAD + PLOT, c); ctx.stroke();
+
+    // Axis labels
+    ctx.fillStyle = 'rgba(52,211,153,0.3)';
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('X', c, S - 8);
+    ctx.fillStyle = 'rgba(96,165,250,0.3)';
+    ctx.save();
+    ctx.translate(10, c);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Y', 0, 0);
+    ctx.restore();
+  }
+
+  function drawTrail() {
+    const len = trail.length;
+    if (len === 0) return;
+
+    // Draw trail segments with fading glow
+    for (let i = 0; i < len; i++) {
+      const age = (len - 1 - i) / Math.max(len - 1, 1); // 0 = newest, 1 = oldest
+      const alpha = 1 - age;
+      const pt = trail[i];
+
+      // Outer glow
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 3 + (1 - age) * 2, 0, 2 * Math.PI);
+      ctx.fillStyle = `rgba(0,255,60,${alpha * 0.12})`;
+      ctx.fill();
+
+      // Core dot
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 1.2, 0, 2 * Math.PI);
+      ctx.fillStyle = `rgba(100,255,140,${alpha * 0.7})`;
+      ctx.fill();
+    }
+
+    // Bright head dot
+    const head = trail[len - 1];
+    // Large glow
+    ctx.beginPath();
+    ctx.arc(head.x, head.y, 10, 0, 2 * Math.PI);
+    ctx.fillStyle = 'rgba(0,255,60,0.15)';
+    ctx.fill();
+    // Medium glow
+    ctx.beginPath();
+    ctx.arc(head.x, head.y, 5, 0, 2 * Math.PI);
+    ctx.fillStyle = 'rgba(100,255,160,0.4)';
+    ctx.fill();
+    // Core
+    ctx.beginPath();
+    ctx.arc(head.x, head.y, 2.5, 0, 2 * Math.PI);
+    ctx.fillStyle = 'rgba(200,255,220,1)';
+    ctx.fill();
+
+    // Bezel shadow
+    const grad = ctx.createRadialGradient(S/2, S/2, PLOT * 0.4, S/2, S/2, S * 0.7);
+    grad.addColorStop(0, 'transparent');
+    grad.addColorStop(1, 'rgba(0,0,0,0.45)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, S, S);
+  }
+
+  // ── Animation loop ──
+  function animate(ts) {
+    if (lastTs === null) lastTs = ts;
+    const dt = Math.min((ts - lastTs) / 1000, 0.05); // cap to avoid jumps
+    lastTs = ts;
+
+    // Advance parametric time
+    t += dt;
+
+    const fx = getFx(), fy = getFy();
+    const cx = PAD + PLOT / 2;
+    const cy = PAD + PLOT / 2;
+
+    // Compute dot position in canvas coords
+    // Visual slow-motion: scale frequencies so motion is visible
+    const vx = xOn ? Math.cos(2 * Math.PI * fx * VIS_SCALE * t) : 0;
+    const vy = yOn ? Math.cos(2 * Math.PI * fy * VIS_SCALE * t) : 0;
+
+    const px = cx + vx * (PLOT / 2);
+    const py = cy - vy * (PLOT / 2);
+
+    // Add to trail
+    trail.push({ x: px, y: py });
+    while (trail.length > trailLen) trail.shift();
+
+    // Draw
+    drawGrid();
+    drawTrail();
+
+    animId = requestAnimationFrame(animate);
+  }
+
+  // ── Start ──
+  syncDisplays();
+  animId = requestAnimationFrame(animate);
+})();
+</script>
+
+</body>
+</html>
