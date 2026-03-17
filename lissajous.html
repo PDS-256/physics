@@ -113,6 +113,21 @@
     .btn-toggle.active { background: #3b82f6; color: #fff; }
     .btn-toggle.active:hover { background: #2563eb; }
 
+    .btn-sound { background: #7c3aed; color: #fff; }
+    .btn-sound:hover { background: #6d28d9; }
+    .btn-sound.active { background: #ef4444; }
+    .btn-sound.active:hover { background: #dc2626; }
+
+    .hz-display {
+      font-size: 0.72rem;
+      color: #666;
+      font-family: 'Consolas', 'SF Mono', 'Menlo', monospace;
+      display: none;
+    }
+    .hz-display.visible { display: inline; }
+    .hz-display .hz-x { color: #34d399; }
+    .hz-display .hz-y { color: #60a5fa; }
+
     /* ── Main display area ── */
     .display-area {
       display: flex;
@@ -241,6 +256,10 @@
       <span class="phi-display" id="phiDisplay">&phi; = 0.00</span>
 
       <button class="btn btn-toggle" id="btnWaves">Show Waves</button>
+      <button class="btn btn-sound" id="btnSound">&#9835; Play Sound</button>
+      <span class="hz-display" id="hzDisplay">
+        <span class="hz-x" id="hzX"></span> + <span class="hz-y" id="hzY"></span>
+      </span>
     </div>
   </div>
 
@@ -277,6 +296,7 @@
     Lissajous figures arise when <i>x</i> = cos(<i>f<sub>x</sub></i> &middot; <i>t</i>) and
     <i>y</i> = cos(<i>f<sub>y</sub></i> &middot; <i>t</i> + &phi;).
     Integer ratios produce closed curves. Animate &phi; to see the figure evolve.
+    Play Sound to hear both frequencies as tones&mdash;the ratio becomes an audible musical interval.
   </p>
 
 <script>
@@ -301,8 +321,12 @@
   const canvasY     = document.getElementById('canvasY');
   const ctxY        = canvasY.getContext('2d');
 
-  const sideY   = document.getElementById('sideY');
-  const bottomX = document.getElementById('bottomX');
+  const sideY    = document.getElementById('sideY');
+  const bottomX  = document.getElementById('bottomX');
+  const btnSound = document.getElementById('btnSound');
+  const hzDisplay = document.getElementById('hzDisplay');
+  const hzX      = document.getElementById('hzX');
+  const hzY      = document.getElementById('hzY');
 
   // ── Sizing ──
   const SCOPE_SIZE = 500;
@@ -520,10 +544,12 @@
   fxSlider.addEventListener('input', () => {
     fx = parseInt(fxSlider.value, 10);
     drawAll();
+    updateSoundFreqs();
   });
   fySlider.addEventListener('input', () => {
     fy = parseInt(fySlider.value, 10);
     drawAll();
+    updateSoundFreqs();
   });
 
   btnAnimate.addEventListener('click', () => {
@@ -545,6 +571,116 @@
     sideY.style.display = showWaves ? '' : 'none';
     bottomX.style.display = showWaves ? '' : 'none';
     drawAll();
+  });
+
+  // ── Sound generation (Web Audio API) ──
+  let audioCtx = null;
+  let soundPlaying = false;
+  let soundNodes = null;       // { oscX, oscY, gainX, gainY, master }
+  const BASE_FREQ = 220;       // A3 — pleasant musical base
+  const MAX_FREQ  = 6000;      // cap to avoid painful high tones
+  const VOLUME    = 0.12;      // gentle volume
+
+  function getFreqs() {
+    // Normalize so the lower ratio component maps to BASE_FREQ
+    const g = gcd(fx, fy);
+    const rx = fx / g;
+    const ry = fy / g;
+    let freqX = BASE_FREQ * rx;
+    let freqY = BASE_FREQ * ry;
+    // If either exceeds MAX_FREQ, scale both down proportionally
+    const maxR = Math.max(freqX, freqY);
+    if (maxR > MAX_FREQ) {
+      const scale = MAX_FREQ / maxR;
+      freqX *= scale;
+      freqY *= scale;
+    }
+    return { freqX: Math.round(freqX), freqY: Math.round(freqY) };
+  }
+
+  function updateHzDisplay() {
+    const { freqX, freqY } = getFreqs();
+    hzX.textContent = freqX + ' Hz';
+    hzY.textContent = freqY + ' Hz';
+  }
+
+  function startSound() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const { freqX, freqY } = getFreqs();
+    const now = audioCtx.currentTime;
+
+    // Master gain with fade envelope
+    const master = audioCtx.createGain();
+    master.gain.setValueAtTime(0, now);
+    master.gain.linearRampToValueAtTime(VOLUME, now + 0.08); // fade in
+    master.connect(audioCtx.destination);
+
+    // Oscillator X (green)
+    const oscX = audioCtx.createOscillator();
+    const gainX = audioCtx.createGain();
+    oscX.type = 'sine';
+    oscX.frequency.setValueAtTime(freqX, now);
+    gainX.gain.setValueAtTime(0.5, now);
+    oscX.connect(gainX).connect(master);
+
+    // Oscillator Y (blue)
+    const oscY = audioCtx.createOscillator();
+    const gainY = audioCtx.createGain();
+    oscY.type = 'sine';
+    oscY.frequency.setValueAtTime(freqY, now);
+    gainY.gain.setValueAtTime(0.5, now);
+    oscY.connect(gainY).connect(master);
+
+    oscX.start(now);
+    oscY.start(now);
+
+    soundNodes = { oscX, oscY, gainX, gainY, master };
+    soundPlaying = true;
+    btnSound.classList.add('active');
+    btnSound.innerHTML = '&#9724; Stop Sound';
+    hzDisplay.classList.add('visible');
+    updateHzDisplay();
+  }
+
+  function stopSound() {
+    if (soundNodes) {
+      const now = audioCtx.currentTime;
+      soundNodes.master.gain.linearRampToValueAtTime(0, now + 0.08); // fade out
+      const nodes = soundNodes;
+      setTimeout(() => {
+        nodes.oscX.stop();
+        nodes.oscY.stop();
+        nodes.oscX.disconnect();
+        nodes.oscY.disconnect();
+        nodes.master.disconnect();
+      }, 120);
+      soundNodes = null;
+    }
+    soundPlaying = false;
+    btnSound.classList.remove('active');
+    btnSound.innerHTML = '&#9835; Play Sound';
+    hzDisplay.classList.remove('visible');
+  }
+
+  // Update frequencies live if sliders change while sound is playing
+  function updateSoundFreqs() {
+    if (soundPlaying && soundNodes) {
+      const { freqX, freqY } = getFreqs();
+      const now = audioCtx.currentTime;
+      soundNodes.oscX.frequency.linearRampToValueAtTime(freqX, now + 0.05);
+      soundNodes.oscY.frequency.linearRampToValueAtTime(freqY, now + 0.05);
+      updateHzDisplay();
+    }
+  }
+
+  btnSound.addEventListener('click', () => {
+    if (soundPlaying) {
+      stopSound();
+    } else {
+      startSound();
+    }
   });
 
   // ── Initial draw ──
