@@ -40,6 +40,11 @@
       align-items: center;
       justify-content: center;
     }
+    .controls-row + .controls-row {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #2a2d3a;
+    }
 
     .control-group {
       display: flex;
@@ -85,13 +90,6 @@
       font-size: 1rem;
     }
 
-    .phi-display {
-      font-size: 0.78rem;
-      color: #666;
-      font-family: 'Consolas', 'SF Mono', 'Menlo', monospace;
-      min-width: 70px;
-    }
-
     .btn {
       border: none;
       border-radius: 6px;
@@ -103,11 +101,6 @@
     }
     .btn:active { transform: scale(0.96); }
 
-    .btn-animate { background: #10b981; color: #fff; }
-    .btn-animate:hover { background: #059669; }
-    .btn-animate.active { background: #ef4444; }
-    .btn-animate.active:hover { background: #dc2626; }
-
     .btn-toggle { background: #374151; color: #ccc; }
     .btn-toggle:hover { background: #4b5563; }
     .btn-toggle.active { background: #3b82f6; color: #fff; }
@@ -118,15 +111,53 @@
     .btn-sound.active { background: #ef4444; }
     .btn-sound.active:hover { background: #dc2626; }
 
-    .hz-display {
-      font-size: 0.72rem;
-      color: #666;
+    /* ── Hz frequency display ── */
+    .hz-info {
+      font-size: 0.78rem;
       font-family: 'Consolas', 'SF Mono', 'Menlo', monospace;
+      color: #666;
+      text-align: center;
       display: none;
     }
-    .hz-display.visible { display: inline; }
-    .hz-display .hz-x { color: #34d399; }
-    .hz-display .hz-y { color: #60a5fa; }
+    .hz-info.visible { display: block; margin-top: 8px; }
+    .hz-val { font-weight: 700; }
+    .hz-val.hz-ok-x { color: #34d399; }
+    .hz-val.hz-ok-y { color: #60a5fa; }
+    .hz-val.hz-over { color: #ef4444; }
+    .hz-warn {
+      font-size: 0.7rem;
+      color: #ef4444;
+      margin-top: 2px;
+    }
+
+    /* ── Slider rows ── */
+    .slider-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .slider-label {
+      font-size: 0.78rem;
+      color: #888;
+      white-space: nowrap;
+      min-width: 70px;
+      text-align: right;
+    }
+    .slider-label .math { font-style: italic; color: #bbb; }
+    .slider-val {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #e0e0e0;
+      font-family: 'Consolas', 'SF Mono', 'Menlo', monospace;
+      min-width: 60px;
+    }
+    .wide-slider {
+      width: 200px;
+      cursor: pointer;
+    }
+    .wide-slider.sl-base { accent-color: #f59e0b; }
+    .wide-slider.sl-phi { accent-color: #a78bfa; }
+    .wide-slider.sl-detune { accent-color: #f472b6; }
 
     /* ── Main display area ── */
     .display-area {
@@ -235,6 +266,7 @@
 
   <!-- Controls -->
   <div class="panel">
+    <!-- Row 1: ratio controls + buttons -->
     <div class="controls-row">
       <div class="control-group">
         <span class="control-label"><span class="math">f<sub>x</sub></span></span>
@@ -252,14 +284,35 @@
         ratio <strong id="ratioVal">2 : 3</strong>
       </div>
 
-      <button class="btn btn-animate" id="btnAnimate">Animate &phi;</button>
-      <span class="phi-display" id="phiDisplay">&phi; = 0.00</span>
-
       <button class="btn btn-toggle" id="btnWaves">Show Waves</button>
       <button class="btn btn-sound" id="btnSound">&#9835; Play Sound</button>
-      <span class="hz-display" id="hzDisplay">
-        <span class="hz-x" id="hzX"></span> + <span class="hz-y" id="hzY"></span>
-      </span>
+    </div>
+
+    <!-- Row 2: base freq, phi, detune -->
+    <div class="controls-row">
+      <div class="slider-group">
+        <span class="slider-label">Base freq</span>
+        <input type="range" class="wide-slider sl-base" id="baseSlider" min="50" max="300" value="220" step="10">
+        <span class="slider-val" id="baseVal">220 Hz</span>
+      </div>
+
+      <div class="slider-group">
+        <span class="slider-label"><span class="math">&phi;</span></span>
+        <input type="range" class="wide-slider sl-phi" id="phiSlider" min="0" max="6.2832" value="0" step="0.01">
+        <span class="slider-val" id="phiVal">&phi; = 0.00</span>
+      </div>
+
+      <div class="slider-group">
+        <span class="slider-label">Detune</span>
+        <input type="range" class="wide-slider sl-detune" id="detuneSlider" min="0" max="5" value="0" step="0.1">
+        <span class="slider-val" id="detuneVal">0.0 Hz</span>
+      </div>
+    </div>
+
+    <!-- Hz readout (shown when sound is playing) -->
+    <div class="hz-info" id="hzInfo">
+      <span class="hz-val hz-ok-x" id="hzX">440 Hz</span> + <span class="hz-val hz-ok-y" id="hzY">660 Hz</span>
+      <div class="hz-warn" id="hzWarn" style="display:none;">Frequencies over 1000 Hz are muted.</div>
     </div>
   </div>
 
@@ -295,8 +348,8 @@
   <p class="hint">
     Lissajous figures arise when <i>x</i> = cos(<i>f<sub>x</sub></i> &middot; <i>t</i>) and
     <i>y</i> = cos(<i>f<sub>y</sub></i> &middot; <i>t</i> + &phi;).
-    Integer ratios produce closed curves. Animate &phi; to see the figure evolve.
-    Play Sound to hear both frequencies as tones&mdash;the ratio becomes an audible musical interval.
+    Integer ratios produce closed curves. Use the &phi; slider to set phase, or slide Detune
+    to slightly offset the frequencies&mdash;the figure drifts and you hear beating.
   </p>
 
 <script>
@@ -304,60 +357,94 @@
   'use strict';
 
   // ── DOM refs ──
-  const fxSlider   = document.getElementById('fxSlider');
-  const fySlider   = document.getElementById('fySlider');
-  const fxVal      = document.getElementById('fxVal');
-  const fyVal      = document.getElementById('fyVal');
-  const ratioVal   = document.getElementById('ratioVal');
-  const phiDisplay = document.getElementById('phiDisplay');
-  const eqBar      = document.getElementById('eqBar');
-  const btnAnimate = document.getElementById('btnAnimate');
-  const btnWaves   = document.getElementById('btnWaves');
+  const fxSlider     = document.getElementById('fxSlider');
+  const fySlider     = document.getElementById('fySlider');
+  const fxVal        = document.getElementById('fxVal');
+  const fyVal        = document.getElementById('fyVal');
+  const ratioVal     = document.getElementById('ratioVal');
+  const eqBar        = document.getElementById('eqBar');
+  const btnWaves     = document.getElementById('btnWaves');
+  const btnSound     = document.getElementById('btnSound');
 
-  const scopeCanvas = document.getElementById('scopeCanvas');
-  const scopeCtx    = scopeCanvas.getContext('2d');
-  const canvasX     = document.getElementById('canvasX');
-  const ctxX        = canvasX.getContext('2d');
-  const canvasY     = document.getElementById('canvasY');
-  const ctxY        = canvasY.getContext('2d');
+  const baseSlider   = document.getElementById('baseSlider');
+  const baseValEl    = document.getElementById('baseVal');
+  const phiSlider    = document.getElementById('phiSlider');
+  const phiValEl     = document.getElementById('phiVal');
+  const detuneSlider = document.getElementById('detuneSlider');
+  const detuneValEl  = document.getElementById('detuneVal');
 
-  const sideY    = document.getElementById('sideY');
-  const bottomX  = document.getElementById('bottomX');
-  const btnSound = document.getElementById('btnSound');
-  const hzDisplay = document.getElementById('hzDisplay');
-  const hzX      = document.getElementById('hzX');
-  const hzY      = document.getElementById('hzY');
+  const hzInfo       = document.getElementById('hzInfo');
+  const hzX          = document.getElementById('hzX');
+  const hzY          = document.getElementById('hzY');
+  const hzWarn       = document.getElementById('hzWarn');
+
+  const scopeCanvas  = document.getElementById('scopeCanvas');
+  const scopeCtx     = scopeCanvas.getContext('2d');
+  const canvasX      = document.getElementById('canvasX');
+  const ctxX         = canvasX.getContext('2d');
+  const canvasY      = document.getElementById('canvasY');
+  const ctxY         = canvasY.getContext('2d');
+
+  const sideY        = document.getElementById('sideY');
+  const bottomX      = document.getElementById('bottomX');
 
   // ── Sizing ──
   const SCOPE_SIZE = 500;
   const SCOPE_PAD  = 30;
   const SCOPE_PLOT = SCOPE_SIZE - 2 * SCOPE_PAD;
-
-  // X waveform canvas width matches the scope+bezel width
   canvasX.width = 960;
 
   // ── State ──
   let fx = 2, fy = 3;
-  let phi = 0;
-  let animating = false;
+  let phi = 0;            // current phase (may be animated by detune)
+  let phiManual = 0;      // value set by the phi slider
+  let baseFreq = 220;
+  let detune = 0;         // Hz offset applied to Y oscillator
   let showWaves = false;
   let animId = null;
   let lastTs = null;
 
-  // ── GCD for simplified ratio ──
-  function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+  const FREQ_LIMIT = 1000;
+  const VOLUME     = 0.12;
 
-  // ── Update display values ──
+  // ── GCD / LCM ──
+  function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+  function lcm(a, b) { return (a * b) / gcd(a, b); }
+
+  // ── Compute actual Hz frequencies ──
+  function getFreqs() {
+    const g = gcd(fx, fy);
+    const rx = fx / g;
+    const ry = fy / g;
+    const freqX = baseFreq * rx;
+    const freqY = baseFreq * ry + detune;
+    return { freqX, freqY };
+  }
+
+  // ── Update all display values ──
   function updateInfo() {
     fxVal.textContent = fx;
     fyVal.textContent = fy;
     const g = gcd(fx, fy);
     ratioVal.textContent = (fx / g) + ' : ' + (fy / g);
-    phiDisplay.innerHTML = '&phi; = ' + phi.toFixed(2);
+    phiValEl.innerHTML = '&phi; = ' + phi.toFixed(2);
+    baseValEl.textContent = baseFreq + ' Hz';
+    detuneValEl.textContent = detune.toFixed(1) + ' Hz';
 
     eqBar.innerHTML =
       `<i>x</i> = <span class="eq-fn">cos</span>(${fx}<i>t</i>), &nbsp; ` +
       `<i>y</i> = <span class="eq-fn">cos</span>(${fy}<i>t</i> + ${phi.toFixed(2)})`;
+
+    // Update Hz readout
+    const { freqX, freqY } = getFreqs();
+    const xOver = freqX > FREQ_LIMIT;
+    const yOver = freqY > FREQ_LIMIT;
+
+    hzX.textContent = Math.round(freqX) + ' Hz';
+    hzX.className = 'hz-val ' + (xOver ? 'hz-over' : 'hz-ok-x');
+    hzY.textContent = Math.round(freqY) + ' Hz';
+    hzY.className = 'hz-val ' + (yOver ? 'hz-over' : 'hz-ok-y');
+    hzWarn.style.display = (xOver || yOver) ? '' : 'none';
   }
 
   // ── Draw the oscilloscope Lissajous figure ──
@@ -365,7 +452,6 @@
     const ctx = scopeCtx;
     const S = SCOPE_SIZE;
 
-    // Clear with dark green-black
     ctx.fillStyle = '#050a04';
     ctx.fillRect(0, 0, S, S);
 
@@ -379,7 +465,7 @@
       ctx.beginPath(); ctx.moveTo(SCOPE_PAD, pos); ctx.lineTo(SCOPE_PAD + SCOPE_PLOT, pos); ctx.stroke();
     }
 
-    // Center cross slightly brighter
+    // Center cross
     ctx.strokeStyle = 'rgba(0,255,60,0.12)';
     const cx = SCOPE_PAD + SCOPE_PLOT / 2;
     ctx.beginPath(); ctx.moveTo(cx, SCOPE_PAD); ctx.lineTo(cx, SCOPE_PAD + SCOPE_PLOT); ctx.stroke();
@@ -388,9 +474,8 @@
     // Draw the Lissajous curve
     const steps = 4000;
     const periods = lcm(fx, fy);
-    const tMax = 2 * Math.PI * periods / fx; // enough to close the curve
+    const tMax = 2 * Math.PI * periods / fx;
 
-    // Glow layer (wider, dimmer)
     ctx.beginPath();
     for (let i = 0; i <= steps; i++) {
       const t = (i / steps) * tMax;
@@ -400,26 +485,22 @@
       const py = SCOPE_PAD + (1 - (yv + 1) / 2) * SCOPE_PLOT;
       if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     }
+
+    // Glow layers
     ctx.strokeStyle = 'rgba(0,255,60,0.15)';
     ctx.lineWidth = 6;
     ctx.stroke();
-
-    // Medium glow
     ctx.strokeStyle = 'rgba(0,255,80,0.35)';
     ctx.lineWidth = 3;
     ctx.stroke();
-
-    // Sharp line
     ctx.strokeStyle = 'rgba(100,255,140,0.9)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
-
-    // Bright core
     ctx.strokeStyle = 'rgba(180,255,200,1)';
     ctx.lineWidth = 0.8;
     ctx.stroke();
 
-    // Outer bezel shadow inside canvas
+    // Bezel shadow
     const grad = ctx.createRadialGradient(S/2, S/2, SCOPE_PLOT * 0.4, S/2, S/2, S * 0.7);
     grad.addColorStop(0, 'transparent');
     grad.addColorStop(1, 'rgba(0,0,0,0.5)');
@@ -427,26 +508,19 @@
     ctx.fillRect(0, 0, S, S);
   }
 
-  function lcm(a, b) { return (a * b) / gcd(a, b); }
-
-  // ── Draw the X waveform (horizontal, below scope) ──
+  // ── Draw X waveform ──
   function drawXWave() {
-    const w = canvasX.width;
-    const h = canvasX.height;
-    const pad = 8;
-    const plotW = w - 2 * pad;
-    const midY = h / 2;
+    const w = canvasX.width, h = canvasX.height, pad = 8;
+    const plotW = w - 2 * pad, midY = h / 2;
 
     ctxX.clearRect(0, 0, w, h);
     ctxX.fillStyle = '#0a0c12';
     ctxX.fillRect(0, 0, w, h);
 
-    // Zero line
     ctxX.strokeStyle = 'rgba(52,211,153,0.1)';
     ctxX.lineWidth = 1;
     ctxX.beginPath(); ctxX.moveTo(pad, midY); ctxX.lineTo(pad + plotW, midY); ctxX.stroke();
 
-    // Waveform
     const steps = 1000;
     const periods = lcm(fx, fy);
     const tMax = 2 * Math.PI * periods / fx;
@@ -463,31 +537,25 @@
     ctxX.lineWidth = 1.5;
     ctxX.stroke();
 
-    // Label
     ctxX.fillStyle = 'rgba(52,211,153,0.5)';
     ctxX.font = '9px system-ui, sans-serif';
     ctxX.textAlign = 'right';
     ctxX.fillText('x = cos(' + fx + 't)', w - pad, h - 4);
   }
 
-  // ── Draw the Y waveform (vertical, left of scope) ──
+  // ── Draw Y waveform ──
   function drawYWave() {
-    const w = canvasY.width;
-    const h = canvasY.height;
-    const pad = 8;
-    const plotH = h - 2 * pad;
-    const midX = w / 2;
+    const w = canvasY.width, h = canvasY.height, pad = 8;
+    const plotH = h - 2 * pad, midX = w / 2;
 
     ctxY.clearRect(0, 0, w, h);
     ctxY.fillStyle = '#0a0c12';
     ctxY.fillRect(0, 0, w, h);
 
-    // Zero line
     ctxY.strokeStyle = 'rgba(96,165,250,0.1)';
     ctxY.lineWidth = 1;
     ctxY.beginPath(); ctxY.moveTo(midX, pad); ctxY.lineTo(midX, pad + plotH); ctxY.stroke();
 
-    // Waveform — y(t) drawn vertically: t goes top to bottom, amplitude goes left/right
     const steps = 1000;
     const periods = lcm(fx, fy);
     const tMax = 2 * Math.PI * periods / fx;
@@ -496,7 +564,7 @@
     for (let i = 0; i <= steps; i++) {
       const t = (i / steps) * tMax;
       const val = Math.cos(fy * t + phi);
-      const py = pad + (1 - (i / steps)) * plotH; // t goes bottom-up to match scope Y
+      const py = pad + (1 - (i / steps)) * plotH;
       const px = midX + val * (midX - pad);
       if (i === 0) ctxY.moveTo(px, py); else ctxY.lineTo(px, py);
     }
@@ -504,7 +572,6 @@
     ctxY.lineWidth = 1.5;
     ctxY.stroke();
 
-    // Label
     ctxY.save();
     ctxY.fillStyle = 'rgba(96,165,250,0.5)';
     ctxY.font = '9px system-ui, sans-serif';
@@ -525,22 +592,34 @@
     }
   }
 
-  // ── Animation loop (phi drifts) ──
+  // ── Animation loop (driven by detune > 0) ──
   function animLoop(ts) {
-    if (!animating) return;
+    if (detune === 0) { animId = null; return; }
     if (lastTs === null) lastTs = ts;
     const dt = (ts - lastTs) / 1000;
     lastTs = ts;
 
-    // Drift phi at a rate that gives a nice visual sweep
-    phi += dt * 0.8;
+    // Phi drifts proportional to detune: Δφ/Δt = 2π × detune / baseFreq
+    // Scaled so small detune = slow drift, feels natural
+    phi += dt * 2 * Math.PI * detune / baseFreq * fy;
     if (phi > 2 * Math.PI) phi -= 2 * Math.PI;
+    if (phi < 0) phi += 2 * Math.PI;
+
+    // Keep the phi slider in sync visually
+    phiSlider.value = phi;
 
     drawAll();
+    updateSoundFreqs();
     animId = requestAnimationFrame(animLoop);
   }
 
-  // ── Event handlers ──
+  function startAnim() {
+    if (animId) return;
+    lastTs = null;
+    animId = requestAnimationFrame(animLoop);
+  }
+
+  // ── Event handlers: ratio sliders ──
   fxSlider.addEventListener('input', () => {
     fx = parseInt(fxSlider.value, 10);
     drawAll();
@@ -552,18 +631,36 @@
     updateSoundFreqs();
   });
 
-  btnAnimate.addEventListener('click', () => {
-    animating = !animating;
-    btnAnimate.textContent = animating ? 'Stop' : 'Animate \u03C6';
-    btnAnimate.classList.toggle('active', animating);
-    if (animating) {
-      lastTs = null;
-      animId = requestAnimationFrame(animLoop);
-    } else {
-      if (animId) cancelAnimationFrame(animId);
-    }
+  // ── Base frequency slider ──
+  baseSlider.addEventListener('input', () => {
+    baseFreq = parseInt(baseSlider.value, 10);
+    drawAll();
+    updateSoundFreqs();
   });
 
+  // ── Phi manual slider ──
+  phiSlider.addEventListener('input', () => {
+    phiManual = parseFloat(phiSlider.value);
+    phi = phiManual;
+    drawAll();
+  });
+
+  // ── Detune slider ──
+  detuneSlider.addEventListener('input', () => {
+    detune = parseFloat(detuneSlider.value);
+    if (detune > 0) {
+      startAnim();
+    }
+    // When detune returns to 0, snap phi back to manual value
+    if (detune === 0) {
+      phi = phiManual;
+      drawAll();
+    }
+    updateSoundFreqs();
+    detuneValEl.textContent = detune.toFixed(1) + ' Hz';
+  });
+
+  // ── Show/Hide waves ──
   btnWaves.addEventListener('click', () => {
     showWaves = !showWaves;
     btnWaves.classList.toggle('active', showWaves);
@@ -576,33 +673,7 @@
   // ── Sound generation (Web Audio API) ──
   let audioCtx = null;
   let soundPlaying = false;
-  let soundNodes = null;       // { oscX, oscY, gainX, gainY, master }
-  const BASE_FREQ = 220;       // A3 — pleasant musical base
-  const MAX_FREQ  = 6000;      // cap to avoid painful high tones
-  const VOLUME    = 0.12;      // gentle volume
-
-  function getFreqs() {
-    // Normalize so the lower ratio component maps to BASE_FREQ
-    const g = gcd(fx, fy);
-    const rx = fx / g;
-    const ry = fy / g;
-    let freqX = BASE_FREQ * rx;
-    let freqY = BASE_FREQ * ry;
-    // If either exceeds MAX_FREQ, scale both down proportionally
-    const maxR = Math.max(freqX, freqY);
-    if (maxR > MAX_FREQ) {
-      const scale = MAX_FREQ / maxR;
-      freqX *= scale;
-      freqY *= scale;
-    }
-    return { freqX: Math.round(freqX), freqY: Math.round(freqY) };
-  }
-
-  function updateHzDisplay() {
-    const { freqX, freqY } = getFreqs();
-    hzX.textContent = freqX + ' Hz';
-    hzY.textContent = freqY + ' Hz';
-  }
+  let soundNodes = null;
 
   function startSound() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -610,27 +681,29 @@
 
     const { freqX, freqY } = getFreqs();
     const now = audioCtx.currentTime;
+    const xOver = freqX > FREQ_LIMIT;
+    const yOver = freqY > FREQ_LIMIT;
 
     // Master gain with fade envelope
     const master = audioCtx.createGain();
     master.gain.setValueAtTime(0, now);
-    master.gain.linearRampToValueAtTime(VOLUME, now + 0.08); // fade in
+    master.gain.linearRampToValueAtTime(VOLUME, now + 0.08);
     master.connect(audioCtx.destination);
 
-    // Oscillator X (green)
+    // Oscillator X
     const oscX = audioCtx.createOscillator();
     const gainX = audioCtx.createGain();
     oscX.type = 'sine';
     oscX.frequency.setValueAtTime(freqX, now);
-    gainX.gain.setValueAtTime(0.5, now);
+    gainX.gain.setValueAtTime(xOver ? 0 : 0.5, now);
     oscX.connect(gainX).connect(master);
 
-    // Oscillator Y (blue)
+    // Oscillator Y
     const oscY = audioCtx.createOscillator();
     const gainY = audioCtx.createGain();
     oscY.type = 'sine';
     oscY.frequency.setValueAtTime(freqY, now);
-    gainY.gain.setValueAtTime(0.5, now);
+    gainY.gain.setValueAtTime(yOver ? 0 : 0.5, now);
     oscY.connect(gainY).connect(master);
 
     oscX.start(now);
@@ -640,14 +713,13 @@
     soundPlaying = true;
     btnSound.classList.add('active');
     btnSound.innerHTML = '&#9724; Stop Sound';
-    hzDisplay.classList.add('visible');
-    updateHzDisplay();
+    hzInfo.classList.add('visible');
   }
 
   function stopSound() {
     if (soundNodes) {
       const now = audioCtx.currentTime;
-      soundNodes.master.gain.linearRampToValueAtTime(0, now + 0.08); // fade out
+      soundNodes.master.gain.linearRampToValueAtTime(0, now + 0.08);
       const nodes = soundNodes;
       setTimeout(() => {
         nodes.oscX.stop();
@@ -661,26 +733,25 @@
     soundPlaying = false;
     btnSound.classList.remove('active');
     btnSound.innerHTML = '&#9835; Play Sound';
-    hzDisplay.classList.remove('visible');
+    hzInfo.classList.remove('visible');
   }
 
-  // Update frequencies live if sliders change while sound is playing
   function updateSoundFreqs() {
-    if (soundPlaying && soundNodes) {
-      const { freqX, freqY } = getFreqs();
-      const now = audioCtx.currentTime;
-      soundNodes.oscX.frequency.linearRampToValueAtTime(freqX, now + 0.05);
-      soundNodes.oscY.frequency.linearRampToValueAtTime(freqY, now + 0.05);
-      updateHzDisplay();
-    }
+    if (!soundPlaying || !soundNodes) return;
+    const { freqX, freqY } = getFreqs();
+    const now = audioCtx.currentTime;
+    const xOver = freqX > FREQ_LIMIT;
+    const yOver = freqY > FREQ_LIMIT;
+
+    soundNodes.oscX.frequency.linearRampToValueAtTime(freqX, now + 0.05);
+    soundNodes.oscY.frequency.linearRampToValueAtTime(freqY, now + 0.05);
+    // Mute/unmute based on frequency limit
+    soundNodes.gainX.gain.linearRampToValueAtTime(xOver ? 0 : 0.5, now + 0.05);
+    soundNodes.gainY.gain.linearRampToValueAtTime(yOver ? 0 : 0.5, now + 0.05);
   }
 
   btnSound.addEventListener('click', () => {
-    if (soundPlaying) {
-      stopSound();
-    } else {
-      startSound();
-    }
+    if (soundPlaying) stopSound(); else startSound();
   });
 
   // ── Initial draw ──
