@@ -715,15 +715,16 @@
 
   // ── Full-figure mode: draw the entire mathematical curve ──
   function drawFullFigure() {
-    const fx = getFx(), fy = getFy();
+    // Use the CLEAN (un-detuned) frequencies so the curve always closes.
+    // The detune effect is expressed purely as the drifting figurePhase.
+    const fxClean = fxMain + fxFineHz;
+    const fyClean = fyMain + fyFineHz;
     const cx = PAD + PLOT / 2;
     const cy = PAD + PLOT / 2;
 
-    // Determine how much parameter range to sweep.
-    // For a clean ratio p:q, the curve closes after q cycles of the lower freq.
-    // For detuned/irrational ratios, sweep enough to fill the figure densely.
-    const hi = Math.max(fx, fy);
-    const lo = Math.min(fx, fy);
+    // Find clean integer ratio for the un-detuned frequencies
+    const hi = Math.max(fxClean, fyClean);
+    const lo = Math.min(fxClean, fyClean);
     const ratio = hi / lo;
 
     // Approximate as integer ratio (up to denominator 40)
@@ -735,22 +736,22 @@
       if (err < 0.001) break;
     }
 
-    // Sweep enough of the parametric curve
-    const periods = bestQ;       // cycles of the X component
+    // Sweep enough of the parametric curve to close it
+    const periods = bestQ;
     const tMax = 2 * Math.PI * periods;
     const steps = Math.max(4000, periods * 800);
 
-    // Normalized frequency multipliers (ratios relative to X)
+    // Use the clean ratio so the curve closes perfectly
     const mx = xOn ? 1 : 0;
     const my = yOn ? 1 : 0;
-    const rNorm = fy / fx;       // exact ratio preserving detune
+    const rClean = fyClean / fxClean;
 
     // Build the path
     ctx.beginPath();
     for (let i = 0; i <= steps; i++) {
       const param = (i / steps) * tMax;
       const vx = mx * Math.cos(param);
-      const vy = my * Math.cos(rNorm * param + figurePhase);
+      const vy = my * Math.cos(rClean * param + figurePhase);
       const px = cx + vx * (PLOT / 2);
       const py = cy - vy * (PLOT / 2);
       if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
