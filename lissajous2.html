@@ -173,6 +173,11 @@
     .btn-detune.active { background: #f59e0b; color: #111; }
     .btn-detune.active:hover { background: #d97706; }
 
+    .btn-full { background: #374151; color: #ccc; }
+    .btn-full:hover { background: #4b5563; }
+    .btn-full.active { background: #10b981; color: #fff; }
+    .btn-full.active:hover { background: #059669; }
+
     .tool-slider {
       width: 80px;
       cursor: pointer;
@@ -271,6 +276,7 @@
       </div>
 
       <button class="btn btn-detune" id="btnDetune">Detune</button>
+      <button class="btn btn-full" id="btnFull">Full Figure</button>
     </div>
   </div>
 
@@ -285,6 +291,7 @@
     Toggle X and Y to watch the dot move along each axis alone, or both for the full figure.
     Use the &#9835; buttons to hear each frequency independently.
     Crank Speed up to see the connected figure fill in, or slow it down to watch the dot trace.
+    Hit Full Figure to draw the entire curve instantly&mdash;then Detune to watch it rotate.
   </p>
 
 <script>
@@ -310,6 +317,7 @@
   const speedSlider = document.getElementById('speedSlider');
   const speedValEl  = document.getElementById('speedVal');
   const btnDetune   = document.getElementById('btnDetune');
+  const btnFull     = document.getElementById('btnFull');
 
   const canvas = document.getElementById('scope');
   const ctx    = canvas.getContext('2d');
@@ -325,6 +333,8 @@
   const DETUNE_HZ = 1.5;
   let trailLen = 300;
   let speedMult = 1.0;     // multiplier on VIS_SCALE
+  let fullFigure = false;
+  let figurePhase = 0;     // drifting phase for full-figure rotation
 
   // Trail buffer
   let trail = [];           // array of {x, y}
@@ -479,6 +489,15 @@
     btnDetune.classList.toggle('active', detuned);
     btnDetune.textContent = detuned ? 'Detuned +' + DETUNE_HZ + ' Hz' : 'Detune';
     resetTrail(); syncDisplays();
+  });
+
+  // ── Full Figure button ──
+  btnFull.addEventListener('click', () => {
+    fullFigure = !fullFigure;
+    btnFull.classList.toggle('active', fullFigure);
+    btnFull.textContent = fullFigure ? 'Trace Mode' : 'Full Figure';
+    figurePhase = 0;
+    resetTrail();
   });
 
   // ══════════════════════════════════════════
@@ -694,36 +713,111 @@
     ctx.fillRect(0, 0, S, S);
   }
 
+  // ── Full-figure mode: draw the entire mathematical curve ──
+  function drawFullFigure() {
+    const fx = getFx(), fy = getFy();
+    const cx = PAD + PLOT / 2;
+    const cy = PAD + PLOT / 2;
+
+    // Determine how much parameter range to sweep.
+    // For a clean ratio p:q, the curve closes after q cycles of the lower freq.
+    // For detuned/irrational ratios, sweep enough to fill the figure densely.
+    const hi = Math.max(fx, fy);
+    const lo = Math.min(fx, fy);
+    const ratio = hi / lo;
+
+    // Approximate as integer ratio (up to denominator 40)
+    let bestP = 1, bestQ = 1, bestErr = 999;
+    for (let q = 1; q <= 40; q++) {
+      const p = Math.round(ratio * q);
+      const err = Math.abs(p / q - ratio);
+      if (err < bestErr) { bestErr = err; bestP = p; bestQ = q; }
+      if (err < 0.001) break;
+    }
+
+    // Sweep enough of the parametric curve
+    const periods = bestQ;       // cycles of the X component
+    const tMax = 2 * Math.PI * periods;
+    const steps = Math.max(4000, periods * 800);
+
+    // Normalized frequency multipliers (ratios relative to X)
+    const mx = xOn ? 1 : 0;
+    const my = yOn ? 1 : 0;
+    const rNorm = fy / fx;       // exact ratio preserving detune
+
+    // Build the path
+    ctx.beginPath();
+    for (let i = 0; i <= steps; i++) {
+      const param = (i / steps) * tMax;
+      const vx = mx * Math.cos(param);
+      const vy = my * Math.cos(rNorm * param + figurePhase);
+      const px = cx + vx * (PLOT / 2);
+      const py = cy - vy * (PLOT / 2);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+
+    // Multi-layer phosphor glow (same as v1 oscilloscope)
+    ctx.strokeStyle = 'rgba(0,255,60,0.15)';
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,255,80,0.35)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(100,255,140,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(180,255,200,1)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+
+    // Bezel vignette
+    const grad = ctx.createRadialGradient(S/2, S/2, PLOT * 0.4, S/2, S/2, S * 0.7);
+    grad.addColorStop(0, 'transparent');
+    grad.addColorStop(1, 'rgba(0,0,0,0.45)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, S, S);
+  }
+
   // ── Animation loop ──
   function animate(ts) {
     if (lastTs === null) lastTs = ts;
     const rawDt = Math.min((ts - lastTs) / 1000, 0.05);
     lastTs = ts;
 
-    const fx = getFx(), fy = getFy();
-    const cx = PAD + PLOT / 2;
-    const cy = PAD + PLOT / 2;
-    const visScale = BASE_VIS_SCALE * speedMult;
-
-    // Sub-step to keep the line smooth at high speeds
-    // At speed 1x, ~60 points/sec is fine. At 8x we need more.
-    const subSteps = Math.max(1, Math.ceil(speedMult * 2));
-    const subDt = rawDt / subSteps;
-
-    for (let s = 0; s < subSteps; s++) {
-      t += subDt;
-      const vx = xOn ? Math.cos(2 * Math.PI * fx * visScale * t) : 0;
-      const vy = yOn ? Math.cos(2 * Math.PI * fy * visScale * t) : 0;
-      const px = cx + vx * (PLOT / 2);
-      const py = cy - vy * (PLOT / 2);
-      trail.push({ x: px, y: py });
-    }
-
-    // Trim trail
-    while (trail.length > trailLen) trail.shift();
-
     drawGrid();
-    drawTrail();
+
+    if (fullFigure) {
+      // In full-figure mode, drift phase when detuned for visible rotation
+      if (detuned) {
+        figurePhase += rawDt * 2 * Math.PI * DETUNE_HZ;
+        if (figurePhase > 2 * Math.PI) figurePhase -= 2 * Math.PI;
+      }
+      drawFullFigure();
+    } else {
+      // Trace mode: advance dot along parametric curve
+      const fx = getFx(), fy = getFy();
+      const cx = PAD + PLOT / 2;
+      const cy = PAD + PLOT / 2;
+      const visScale = BASE_VIS_SCALE * speedMult;
+
+      // Sub-step to keep the line smooth at high speeds
+      const subSteps = Math.max(1, Math.ceil(speedMult * 2));
+      const subDt = rawDt / subSteps;
+
+      for (let s = 0; s < subSteps; s++) {
+        t += subDt;
+        const vx = xOn ? Math.cos(2 * Math.PI * fx * visScale * t) : 0;
+        const vy = yOn ? Math.cos(2 * Math.PI * fy * visScale * t) : 0;
+        const px = cx + vx * (PLOT / 2);
+        const py = cy - vy * (PLOT / 2);
+        trail.push({ x: px, y: py });
+      }
+
+      // Trim trail
+      while (trail.length > trailLen) trail.shift();
+
+      drawTrail();
+    }
 
     animId = requestAnimationFrame(animate);
   }
