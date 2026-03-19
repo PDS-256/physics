@@ -150,10 +150,10 @@
     }
     .btn:active { transform: scale(0.96); }
 
-    .btn-detune { background: #374151; color: #ccc; }
-    .btn-detune:hover { background: #4b5563; }
-    .btn-detune.active { background: #f59e0b; color: #111; }
-    .btn-detune.active:hover { background: #d97706; }
+    .btn-animate { background: #374151; color: #ccc; padding: 4px 10px; }
+    .btn-animate:hover { background: #4b5563; }
+    .btn-animate.active { background: #f59e0b; color: #111; }
+    .btn-animate.active:hover { background: #d97706; }
 
     .btn-full { background: #374151; color: #ccc; }
     .btn-full:hover { background: #4b5563; }
@@ -281,9 +281,9 @@
         <span class="tool-label">Phase</span>
         <input type="range" class="phase-slider" id="phaseSlider" min="0" max="360" value="0" step="1">
         <span class="phase-val" id="phaseVal">0°</span>
+        <button class="btn btn-animate" id="btnAnimate">Animate</button>
       </div>
 
-      <button class="btn btn-detune" id="btnDetune">Detune</button>
       <button class="btn btn-full" id="btnFull">Full Figure</button>
     </div>
   </div>
@@ -298,8 +298,9 @@
   <p class="hint">
     Toggle X and Y to watch the dot move along each axis alone, or both for the full figure.
     Use the &#9835; buttons to hear each frequency independently.
-    Crank Speed up to see the connected figure fill in, or slow it down to watch the dot trace.
-    Hit Full Figure to draw the entire curve instantly&mdash;then Detune to watch it rotate.
+    Adjust Speed to see the figure fill in fast or trace slowly.
+    Use the Phase slider to shift the Y channel, or hit Animate to sweep through all phases.
+    Full Figure draws the entire curve at once.
   </p>
 
 <script>
@@ -320,7 +321,7 @@
   const speedGroup  = document.getElementById('speedGroup');
   const phaseSlider = document.getElementById('phaseSlider');
   const phaseValEl  = document.getElementById('phaseVal');
-  const btnDetune   = document.getElementById('btnDetune');
+  const btnAnimate  = document.getElementById('btnAnimate');
   const btnFull     = document.getElementById('btnFull');
 
   const canvas = document.getElementById('scope');
@@ -333,13 +334,13 @@
   let fxMain = 200, fyMain = 200;
   let fxFineHz = 0, fyFineHz = 0;
   let xOn = false, yOn = false;
-  let detuned = false;
-  const DETUNE_HZ = 1.5;
   let trailLen = 300;
   let speedMult = 1.0;     // multiplier on VIS_SCALE
   let fullFigure = false;
   let figurePhase = 0;     // drifting phase for full-figure rotation
   let manualPhase = 0;     // manual phase offset in radians (from slider)
+  let animatingPhase = false;  // auto-animate phase sweep
+  const PHASE_SPEED_DEG = 30;  // degrees per second
 
   // Trail buffer
   let trail = [];           // array of {x, y}
@@ -352,7 +353,7 @@
 
   // ── Derived frequencies ──
   function getFx() { return fxMain + fxFineHz; }
-  function getFy() { return fyMain + fyFineHz + (detuned ? DETUNE_HZ : 0); }
+  function getFy() { return fyMain + fyFineHz; }
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
@@ -477,15 +478,19 @@
     const deg = parseInt(phaseSlider.value, 10);
     manualPhase = deg * Math.PI / 180;
     phaseValEl.textContent = deg + '°';
+    if (animatingPhase) {
+      animatingPhase = false;
+      btnAnimate.classList.remove('active');
+      btnAnimate.textContent = 'Animate';
+    }
     resetTrail();
   });
 
-  // ── Detune button ──
-  btnDetune.addEventListener('click', () => {
-    detuned = !detuned;
-    btnDetune.classList.toggle('active', detuned);
-    btnDetune.textContent = detuned ? 'Detuned +' + DETUNE_HZ + ' Hz' : 'Detune';
-    resetTrail(); syncDisplays();
+  // ── Animate phase button ──
+  btnAnimate.addEventListener('click', () => {
+    animatingPhase = !animatingPhase;
+    btnAnimate.classList.toggle('active', animatingPhase);
+    btnAnimate.textContent = animatingPhase ? 'Stop' : 'Animate';
   });
 
   // ── Full Figure button ──
@@ -782,14 +787,20 @@
     const rawDt = Math.min((ts - lastTs) / 1000, 0.05);
     lastTs = ts;
 
+    // Animate phase sweep if active
+    if (animatingPhase) {
+      const degPerFrame = PHASE_SPEED_DEG * rawDt;
+      let deg = parseFloat(phaseSlider.value) + degPerFrame;
+      if (deg >= 360) deg -= 360;
+      phaseSlider.value = Math.round(deg);
+      manualPhase = deg * Math.PI / 180;
+      phaseValEl.textContent = Math.round(deg) + '°';
+      resetTrail();
+    }
+
     drawGrid();
 
     if (fullFigure) {
-      // In full-figure mode, drift phase when detuned for visible rotation
-      if (detuned) {
-        figurePhase += rawDt * 2 * Math.PI * DETUNE_HZ;
-        if (figurePhase > 2 * Math.PI) figurePhase -= 2 * Math.PI;
-      }
       drawFullFigure();
     } else {
       // Trace mode: advance dot along parametric curve
