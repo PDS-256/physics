@@ -789,13 +789,12 @@
 
     // Animate phase sweep if active
     if (animatingPhase) {
-      const degPerFrame = PHASE_SPEED_DEG * rawDt;
+      const degPerFrame = PHASE_SPEED_DEG * speedMult * rawDt;
       let deg = parseFloat(phaseSlider.value) + degPerFrame;
       if (deg >= 360) deg -= 360;
       phaseSlider.value = Math.round(deg);
       manualPhase = deg * Math.PI / 180;
       phaseValEl.textContent = Math.round(deg) + '°';
-      resetTrail();
     }
 
     drawGrid();
