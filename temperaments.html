@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Musical Temperaments — Physics of Sound</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0f1117;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 60px;
+    }
+
+    h1 { font-size: 1.6rem; font-weight: 600; margin-bottom: 4px; color: #f0f0f0; }
+    .subtitle { font-size: 0.85rem; color: #888; margin-bottom: 18px; text-align: center; }
+
+    .panel {
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 10px;
+      padding: 14px 22px;
+      max-width: 960px;
+      width: 100%;
+      margin-bottom: 12px;
+    }
+
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px 20px;
+      align-items: center;
+    }
+
+    .sep {
+      width: 1px; height: 22px;
+      background: #2a2d3a;
+      flex-shrink: 0;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .control-group label {
+      font-size: 0.79rem;
+      color: #aaa;
+      white-space: nowrap;
+    }
+    .ctrl-val {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #f0f0f0;
+      min-width: 52px;
+    }
+
+    .check-row {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .check-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .check-item input[type="checkbox"] { cursor: pointer; accent-color: #3b82f6; }
+    .swatch {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .check-item span { font-size: 0.8rem; }
+
+    .btn {
+      border: none; border-radius: 6px;
+      padding: 7px 15px;
+      font-size: 0.81rem; font-weight: 600;
+      cursor: pointer;
+      transition: background 0.14s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn:active { transform: scale(0.96); }
+    .btn-green  { background: #10b981; color: #fff; }
+    .btn-green:hover  { background: #059669; }
+    .btn-purple { background: #8b5cf6; color: #fff; }
+    .btn-purple:hover { background: #7c3aed; }
+    .btn-amber  { background: #f59e0b; color: #1a1a1a; }
+    .btn-amber:hover  { background: #d97706; }
+    .btn-red    { background: #ef4444; color: #fff; }
+    .btn-red:hover    { background: #dc2626; }
+
+    select.play-sel {
+      background: #0f1117;
+      border: 1px solid #374151;
+      color: #f0f0f0;
+      border-radius: 5px;
+      padding: 5px 8px;
+      font-size: 0.79rem;
+      cursor: pointer;
+    }
+
+    .canvas-wrapper {
+      position: relative;
+      max-width: 960px;
+      width: 100%;
+      background: #0a0c12;
+      border-radius: 10px;
+      border: 1px solid #2a2d3a;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+    canvas { display: block; width: 100%; }
+
+    .tooltip {
+      position: absolute;
+      background: rgba(8, 10, 18, 0.97);
+      border: 1px solid #2a2d3a;
+      border-radius: 7px;
+      padding: 9px 13px;
+      font-size: 0.75rem;
+      color: #e0e0e0;
+      line-height: 1.75;
+      pointer-events: none;
+      display: none;
+      z-index: 30;
+      min-width: 200px;
+    }
+
+    .legend {
+      display: flex;
+      gap: 18px;
+      justify-content: center;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.77rem; color: #888;
+    }
+    .leg-dot { width: 9px; height: 9px; border-radius: 50%; }
+    .leg-dash {
+      width: 20px; height: 0;
+      border-top: 1px dashed rgba(255,255,255,0.3);
+    }
+
+    .hint {
+      font-size: 0.74rem; color: #555;
+      margin-top: 9px; text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Musical Temperaments</h1>
+<p class="subtitle">Just intonation &middot; Pythagorean tuning &middot; Equal temperament &mdash; compared on a logarithmic frequency scale</p>
+
+<!-- Controls -->
+<div class="panel">
+  <div class="controls-row">
+    <div class="control-group">
+      <label>Fundamental:</label>
+      <input type="range" id="fundSlider" min="150" max="300" value="220" step="1"
+             style="width:90px; accent-color:#3b82f6; cursor:pointer;">
+      <span class="ctrl-val"><span id="fundVal">220</span> Hz</span>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="control-group">
+      <label>Show:</label>
+      <div class="check-row">
+        <label class="check-item">
+          <input type="checkbox" id="chkJust" checked>
+          <span class="swatch" style="background:#3b82f6;"></span>
+          <span style="color:#3b82f6;">Just (5-limit)</span>
+        </label>
+        <label class="check-item">
+          <input type="checkbox" id="chkPyth" checked>
+          <span class="swatch" style="background:#f59e0b;"></span>
+          <span style="color:#f59e0b;">Pythagorean</span>
+        </label>
+        <label class="check-item">
+          <input type="checkbox" id="chkET" checked>
+          <span class="swatch" style="background:#10b981;"></span>
+          <span style="color:#10b981;">Equal Temp.</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="control-group">
+      <label>ET divisions:</label>
+      <input type="range" id="divSlider" min="5" max="24" value="12" step="1"
+             style="width:90px; accent-color:#10b981; cursor:pointer;">
+      <span class="ctrl-val"><span id="divVal">12</span>-EDO</span>
+    </div>
+  </div>
+</div>
+
+<!-- Play controls -->
+<div class="panel">
+  <div class="controls-row" style="justify-content:center;">
+    <div class="control-group">
+      <label>Play using:</label>
+      <select class="play-sel" id="playSys">
+        <option value="just">Just intonation</option>
+        <option value="pyth">Pythagorean</option>
+        <option value="et" selected>Equal temperament</option>
+      </select>
+    </div>
+    <div class="sep"></div>
+    <button class="btn btn-green"  id="btnScale">▶ Scale</button>
+    <button class="btn btn-purple" id="btnTriad">♩ Major triad</button>
+    <button class="btn btn-purple" id="btnFifth">♩ Perfect 5th</button>
+    <button class="btn btn-amber"  id="btnCompare">⇄ Compare triads</button>
+    <button class="btn btn-red"    id="btnStop">■ Stop</button>
+  </div>
+</div>
+
+<!-- Visualization -->
+<div class="canvas-wrapper" id="wrapper">
+  <canvas id="canvas"></canvas>
+  <div class="tooltip" id="tip"></div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="leg-dot" style="background:#3b82f6;"></div> Just intonation (5-limit chromatic)</div>
+  <div class="legend-item"><div class="leg-dot" style="background:#f59e0b;"></div> Pythagorean (12-tone)</div>
+  <div class="legend-item"><div class="leg-dot" style="background:#10b981;"></div> Equal temperament (n-EDO)</div>
+  <div class="legend-item"><div class="leg-dash"></div> Just ratio reference lines</div>
+</div>
+<p class="hint">Hover a note for exact ratio, frequency, and cent deviation from just. Click to hear it. &ldquo;Compare triads&rdquo; plays just &rarr; Pythagorean &rarr; ET in sequence.</p>
+
+<script>
+(function () {
+'use strict';
+
+// ── Tuning data ──────────────────────────────────────────────────────────────
+
+const JUST = [
+  { ratio: 1/1,   name: 'P1', fraction: '1/1'    },
+  { ratio: 16/15, name: 'm2', fraction: '16/15'  },
+  { ratio: 9/8,   name: 'M2', fraction: '9/8'    },
+  { ratio: 6/5,   name: 'm3', fraction: '6/5'    },
+  { ratio: 5/4,   name: 'M3', fraction: '5/4'    },
+  { ratio: 4/3,   name: 'P4', fraction: '4/3'    },
+  { ratio: 45/32, name: 'A4', fraction: '45/32'  },
+  { ratio: 3/2,   name: 'P5', fraction: '3/2'    },
+  { ratio: 8/5,   name: 'm6', fraction: '8/5'    },
+  { ratio: 5/3,   name: 'M6', fraction: '5/3'    },
+  { ratio: 9/5,   name: 'm7', fraction: '9/5'    },
+  { ratio: 15/8,  name: 'M7', fraction: '15/8'   },
+  { ratio: 2/1,   name: 'P8', fraction: '2/1'    },
+];
+
+// Pythagorean 12-tone (built from stacked 3/2 fifths, reduced to one octave)
+const PYTH = [
+  { ratio: 1/1,     name: 'C',  fraction: '1/1'     },
+  { ratio: 256/243, name: 'C♯', fraction: '256/243' },
+  { ratio: 9/8,     name: 'D',  fraction: '9/8'     },
+  { ratio: 32/27,   name: 'E♭', fraction: '32/27'   },
+  { ratio: 81/64,   name: 'E',  fraction: '81/64'   },
+  { ratio: 4/3,     name: 'F',  fraction: '4/3'     },
+  { ratio: 729/512, name: 'F♯', fraction: '729/512' },
+  { ratio: 3/2,     name: 'G',  fraction: '3/2'     },
+  { ratio: 128/81,  name: 'A♭', fraction: '128/81'  },
+  { ratio: 27/16,   name: 'A',  fraction: '27/16'   },
+  { ratio: 16/9,    name: 'B♭', fraction: '16/9'    },
+  { ratio: 243/128, name: 'B',  fraction: '243/128' },
+  { ratio: 2/1,     name: 'C′', fraction: '2/1'     },
+];
+
+function buildET(n) {
+  const out = [];
+  for (let k = 0; k <= n; k++) {
+    out.push({
+      ratio: Math.pow(2, k / n),
+      name: String(k),
+      fraction: k === 0 ? '1/1' : (k === n ? '2/1' : `2^(${k}/${n})`),
+      step: k, divisions: n,
+    });
+  }
+  return out;
+}
+
+// ── Canvas layout ─────────────────────────────────────────────────────────────
+
+const CW = 960, CH = 680;
+const PAD_L = 130, PAD_R = 85, PAD_T = 38, PAD_B = 34;
+const PLOT_W = CW - PAD_L - PAD_R;  // 745
+const PLOT_H = CH - PAD_T - PAD_B;  // 608
+
+// Three equal lanes
+const LANE_W = PLOT_W / 3;          // ≈ 248
+const LC = [                        // lane centers in canvas coords
+  PAD_L + LANE_W * 0.5,
+  PAD_L + LANE_W * 1.5,
+  PAD_L + LANE_W * 2.5,
+];
+
+const canvas  = document.getElementById('canvas');
+const ctx     = canvas.getContext('2d');
+const wrapper = document.getElementById('wrapper');
+const tip     = document.getElementById('tip');
+
+canvas.width  = CW;
+canvas.height = CH;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+
+let fundamental = 220;
+let showJust    = true;
+let showPyth    = true;
+let showET      = true;
+let etDiv       = 12;
+
+// ── Math helpers ──────────────────────────────────────────────────────────────
+
+function ratioToY(r) {
+  // ratio 1 → bottom (PAD_T + PLOT_H), ratio 2 → top (PAD_T)
+  return PAD_T + PLOT_H * (1 - Math.log2(r));
+}
+
+function toCents(r) { return 1200 * Math.log2(r); }
+
+// Deviation (¢) of ratio from nearest just interval in JUST
+function nearestJust(ratio) {
+  let best = JUST[0], bestDev = Infinity;
+  for (const j of JUST) {
+    const dev = toCents(ratio / j.ratio);
+    if (Math.abs(dev) < Math.abs(bestDev)) { bestDev = dev; best = j; }
+  }
+  return { interval: best, cents: bestDev };
+}
+
+// ── Draw ──────────────────────────────────────────────────────────────────────
+
+let hoverTargets = [];
+const DOT_R = 6.5;
+
+function draw() {
+  const etScale = buildET(etDiv);
+  hoverTargets = [];
+
+  ctx.clearRect(0, 0, CW, CH);
+
+  // Background
+  ctx.fillStyle = '#0a0c12';
+  ctx.fillRect(0, 0, CW, CH);
+  ctx.fillStyle = '#0c0e19';
+  ctx.fillRect(PAD_L, PAD_T, PLOT_W, PLOT_H);
+
+  // ── Reference lines + left labels (just ratios) ──
+  for (const j of JUST) {
+    const y = ratioToY(j.ratio);
+    const isEdge = (j.ratio === 1 || j.ratio === 2);
+
+    // Horizontal reference line
+    ctx.strokeStyle = isEdge ? 'rgba(255,255,255,0.20)' : 'rgba(255,255,255,0.07)';
+    ctx.lineWidth   = isEdge ? 1.5 : 1;
+    ctx.setLineDash(isEdge ? [] : [3, 5]);
+    ctx.beginPath();
+    ctx.moveTo(PAD_L, y);
+    ctx.lineTo(CW - PAD_R, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Interval name (far left)
+    ctx.fillStyle = 'rgba(255,255,255,0.30)';
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(j.name, PAD_L - 72, y + 3.5);
+
+    // Fraction (left margin, monospace)
+    ctx.fillStyle = isEdge ? 'rgba(255,255,255,0.70)' : 'rgba(255,255,255,0.50)';
+    ctx.font = `${isEdge ? 11 : 10}px "SF Mono", "Consolas", monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(j.fraction, PAD_L - 8, y + 3.5);
+
+    // Frequency label (right margin)
+    ctx.fillStyle = 'rgba(255,255,255,0.32)';
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText((fundamental * j.ratio).toFixed(1) + ' Hz', CW - PAD_R + 7, y + 3.5);
+  }
+
+  // ── Cent tick marks on right margin (50¢ intervals) ──
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.font = '8.5px system-ui, sans-serif';
+  ctx.textAlign = 'right';
+  for (let c = 0; c <= 1200; c += 100) {
+    const y = ratioToY(Math.pow(2, c / 1200));
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.fillText(c + '¢', PAD_L - 36, y + 3);
+  }
+
+  // ── Lane dividers ──
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+  for (let i = 1; i < 3; i++) {
+    const x = PAD_L + i * LANE_W;
+    ctx.beginPath();
+    ctx.moveTo(x, PAD_T);
+    ctx.lineTo(x, PAD_T + PLOT_H);
+    ctx.stroke();
+  }
+
+  // ── Lane headers ──
+  const hdrs   = ['Just (5-limit)', 'Pythagorean', `${etDiv}-EDO`];
+  const hdrClr = ['#3b82f6', '#f59e0b', '#10b981'];
+  const vis    = [showJust, showPyth, showET];
+  for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = vis[i] ? hdrClr[i] : 'rgba(255,255,255,0.18)';
+    ctx.font = '600 11px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(hdrs[i], LC[i], PAD_T - 14);
+  }
+
+  // ── Notes ──
+  if (showJust) drawNotes(JUST,    LC[0], '#3b82f6', 'just');
+  if (showPyth) drawNotes(PYTH,    LC[1], '#f59e0b', 'pyth');
+  if (showET)   drawNotes(etScale, LC[2], '#10b981', 'et');
+
+  // ── Border ──
+  ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(PAD_L, PAD_T, PLOT_W, PLOT_H);
+}
+
+function drawNotes(scale, xCenter, color, sysId) {
+  const showLabel = (sysId !== 'et') || (etDiv <= 16);
+
+  for (const note of scale) {
+    const y = ratioToY(note.ratio);
+    if (y < PAD_T - 4 || y > PAD_T + PLOT_H + 4) continue;
+
+    // Dot
+    ctx.beginPath();
+    ctx.arc(xCenter, y, DOT_R, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Inner highlight
+    ctx.beginPath();
+    ctx.arc(xCenter - 1.5, y - 1.5, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fill();
+
+    // Label
+    if (showLabel) {
+      ctx.fillStyle = 'rgba(255,255,255,0.60)';
+      ctx.font = '9px system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      const lbl = sysId === 'just' ? note.fraction :
+                  sysId === 'pyth' ? note.name : note.name;
+      ctx.fillText(lbl, xCenter + DOT_R + 3, y + 3.5);
+    }
+
+    hoverTargets.push({ x: xCenter, y, note, color, sysId });
+  }
+}
+
+// ── Tooltip ───────────────────────────────────────────────────────────────────
+
+wrapper.addEventListener('mousemove', (e) => {
+  const rect = wrapper.getBoundingClientRect();
+  const sx = CW / rect.width;
+  const sy = CH / rect.height;
+  const cx = (e.clientX - rect.left) * sx;
+  const cy = (e.clientY - rect.top)  * sy;
+
+  let hit = null;
+  for (const t of hoverTargets) {
+    const dx = cx - t.x, dy = cy - t.y;
+    if (dx*dx + dy*dy < (DOT_R + 5) * (DOT_R + 5)) { hit = t; break; }
+  }
+
+  if (!hit) { tip.style.display = 'none'; return; }
+
+  const n    = hit.note;
+  const freq = (fundamental * n.ratio).toFixed(2);
+  const c    = toCents(n.ratio).toFixed(1);
+  const nj   = nearestJust(n.ratio);
+  const dev  = nj.cents;
+  const devStr = (dev >= 0 ? '+' : '') + dev.toFixed(1) + ' ¢';
+  const devColor = Math.abs(dev) < 1 ? '#4ade80' :
+                   Math.abs(dev) < 6 ? '#fde68a' :
+                   Math.abs(dev) < 16 ? '#fbbf24' : '#f87171';
+
+  const sysName = hit.sysId === 'just' ? 'Just intonation' :
+                  hit.sysId === 'pyth' ? 'Pythagorean' :
+                  `${etDiv}-EDO equal temp.`;
+
+  let html = `<span style="color:${hit.color};font-weight:600;">${sysName}</span>`;
+  html += `<br><b>${n.name}</b>`;
+  if (n.fraction && n.fraction !== n.name) {
+    html += ` &nbsp;<span style="opacity:0.55;font-family:monospace">${n.fraction}</span>`;
+  }
+  html += `<br>Ratio:&ensp;${n.ratio.toFixed(6)}`;
+  html += `<br>Freq:&ensp;${freq} Hz`;
+  html += `<br>Cents from P1:&ensp;${c} ¢`;
+  if (hit.sysId !== 'just' || Math.abs(dev) > 0.05) {
+    html += `<br>vs. just <span style="font-family:monospace">${nj.interval.fraction}</span>:&ensp;<span style="color:${devColor}">${devStr}</span>`;
+  }
+
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+
+  const cssX = e.clientX - rect.left;
+  const cssY = e.clientY - rect.top;
+  const tw = 220, th = 110;
+  tip.style.left = (cssX + 14 + tw > rect.width  ? cssX - tw - 8 : cssX + 14) + 'px';
+  tip.style.top  = (cssY + 14 + th > rect.height ? cssY - th - 8 : cssY + 14) + 'px';
+});
+
+wrapper.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+
+wrapper.addEventListener('click', (e) => {
+  const rect = wrapper.getBoundingClientRect();
+  const sx = CW / rect.width, sy = CH / rect.height;
+  const cx = (e.clientX - rect.left) * sx;
+  const cy = (e.clientY - rect.top)  * sy;
+  for (const t of hoverTargets) {
+    const dx = cx - t.x, dy = cy - t.y;
+    if (dx*dx + dy*dy < (DOT_R + 5) * (DOT_R + 5)) {
+      playNote(fundamental * t.note.ratio, 1.2, 0);
+      break;
+    }
+  }
+});
+
+// ── Audio ─────────────────────────────────────────────────────────────────────
+
+let audioCtx  = null;
+let scheduled = [];
+
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function stopAll() {
+  for (const n of scheduled) { try { n.stop(0); } catch(_) {} }
+  scheduled = [];
+}
+
+function playNote(freq, dur, startDelay) {
+  ensureAudio();
+  const t0  = audioCtx.currentTime + startDelay;
+  const osc = audioCtx.createOscillator();
+  const env = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  env.gain.setValueAtTime(0, t0);
+  env.gain.linearRampToValueAtTime(0.28, t0 + 0.015);
+  env.gain.setValueAtTime(0.28, t0 + dur - 0.06);
+  env.gain.linearRampToValueAtTime(0, t0 + dur);
+  osc.connect(env);
+  env.connect(audioCtx.destination);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.02);
+  scheduled.push(osc);
+}
+
+function getScale() {
+  const s = document.getElementById('playSys').value;
+  if (s === 'just') return JUST;
+  if (s === 'pyth') return PYTH;
+  return buildET(etDiv);
+}
+
+function closestTo(scale, targetRatio) {
+  let best = scale[0], bd = Infinity;
+  for (const n of scale) {
+    const d = Math.abs(Math.log2(n.ratio) - Math.log2(targetRatio));
+    if (d < bd) { bd = d; best = n; }
+  }
+  return best;
+}
+
+function playScale() {
+  stopAll();
+  const sc = getScale();
+  let t = 0;
+  for (const note of sc) {
+    playNote(fundamental * note.ratio, 0.36, t);
+    t += 0.39;
+  }
+}
+
+function playTriad(scale) {
+  stopAll();
+  const root  = scale[0];
+  const third = closestTo(scale, 5/4);
+  const fifth = closestTo(scale, 3/2);
+  playNote(fundamental * root.ratio,  2.8, 0);
+  playNote(fundamental * third.ratio, 2.8, 0);
+  playNote(fundamental * fifth.ratio, 2.8, 0);
+  playNote(fundamental * root.ratio * 2, 2.8, 0);
+}
+
+function playFifth(scale) {
+  stopAll();
+  const root  = scale[0];
+  const fifth = closestTo(scale, 3/2);
+  playNote(fundamental * root.ratio,  3.0, 0);
+  playNote(fundamental * fifth.ratio, 3.0, 0);
+}
+
+function compareTriads() {
+  stopAll();
+  const systems = [JUST, PYTH, buildET(etDiv)];
+  const gap = 0.4;
+  const dur = 2.2;
+  let t = 0;
+  for (const sc of systems) {
+    const root  = sc[0];
+    const third = closestTo(sc, 5/4);
+    const fifth = closestTo(sc, 3/2);
+    playNote(fundamental * root.ratio,  dur, t);
+    playNote(fundamental * third.ratio, dur, t);
+    playNote(fundamental * fifth.ratio, dur, t);
+    playNote(fundamental * root.ratio * 2, dur, t);
+    t += dur + gap;
+  }
+}
+
+// ── Controls ──────────────────────────────────────────────────────────────────
+
+const fundSlider = document.getElementById('fundSlider');
+const fundValEl  = document.getElementById('fundVal');
+const divSlider  = document.getElementById('divSlider');
+const divValEl   = document.getElementById('divVal');
+
+fundSlider.addEventListener('input', () => {
+  fundamental = parseFloat(fundSlider.value);
+  fundValEl.textContent = fundamental;
+  draw();
+});
+
+divSlider.addEventListener('input', () => {
+  etDiv = parseInt(divSlider.value, 10);
+  divValEl.textContent = etDiv;
+  draw();
+});
+
+document.getElementById('chkJust').addEventListener('change', e => { showJust = e.target.checked; draw(); });
+document.getElementById('chkPyth').addEventListener('change', e => { showPyth = e.target.checked; draw(); });
+document.getElementById('chkET'  ).addEventListener('change', e => { showET   = e.target.checked; draw(); });
+
+document.getElementById('btnScale'  ).addEventListener('click', () => playScale());
+document.getElementById('btnTriad'  ).addEventListener('click', () => playTriad(getScale()));
+document.getElementById('btnFifth'  ).addEventListener('click', () => playFifth(getScale()));
+document.getElementById('btnCompare').addEventListener('click', () => compareTriads());
+document.getElementById('btnStop'   ).addEventListener('click', () => stopAll());
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+draw();
+
+})();
+</script>
+
+</body>
+</html>
