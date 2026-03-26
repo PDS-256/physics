@@ -126,7 +126,7 @@
       background: #faf8f5;
       border: 1px solid #e5e0d8;
     }
-    #fftCanvas {
+    #srFftCanvas {
       background: #0b0d15;
       border-color: #2a2d3a;
     }
@@ -271,7 +271,8 @@
     <button class="btn btn-teal" id="btnPlaySR">&#9654; Play at this sample rate</button>
     <span class="play-hint">Lower the rate, then compare with the Play button above to hear aliasing</span>
   </div>
-  <canvas id="fftCanvas" height="160"></canvas>
+  <canvas id="srWaveCanvas" height="150" style="margin-bottom:10px;"></canvas>
+  <canvas id="srFftCanvas"  height="170"></canvas>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════ -->
@@ -467,119 +468,226 @@ function drawWaveform() {
   ctx.fillText('30 ms', w - 6, h - 6);
 }
 
-// ── Draw: FFT / spectrum (Section 2) ─────────────────────────────
+// ── Draw: sampled waveform (Section 2, top canvas) ───────────────
 
-// Deterministic LCG for a consistent noise floor (no flicker on redraw)
-function lcg(seed) {
-  let s = seed >>> 0;
-  return () => { s = Math.imul(s, 1664525) + 1013904223 >>> 0; return s / 0x100000000; };
+function drawSampledWaveform() {
+  const { ctx, w, h } = prep('srWaveCanvas');
+  bg(ctx, w, h);
+  centerRule(ctx, w, h);
+
+  const DISP_DUR = 0.030;
+  const contSR   = 44100;
+  const sampSR   = getSR();
+  const contSamp = generateSamples(contSR, DISP_DUR);
+  const sampSamp = generateSamples(sampSR, DISP_DUR);
+  const nCont    = contSamp.length;
+  const nSamp    = sampSamp.length;
+  const amp      = h / 2 - 8;
+
+  // Continuous original (gray)
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  for (let i = 0; i < nCont; i++) {
+    const x = (i / (nCont - 1)) * w;
+    const y = h / 2 - contSamp[i] * amp;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  const spacing = w / Math.max(nSamp - 1, 1);  // px between samples
+
+  if (spacing >= 3) {
+    // Sparse: draw stems (vertical lines from zero to sample) + dots
+    ctx.save();
+    ctx.strokeStyle = 'rgba(61,111,160,0.55)';
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < nSamp; i++) {
+      const x = nSamp > 1 ? (i / (nSamp - 1)) * w : w / 2;
+      const y = h / 2 - sampSamp[i] * amp;
+      ctx.beginPath(); ctx.moveTo(x, h / 2); ctx.lineTo(x, y); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.fillStyle = '#3d6fa0';
+    for (let i = 0; i < nSamp; i++) {
+      const x = nSamp > 1 ? (i / (nSamp - 1)) * w : w / 2;
+      const y = h / 2 - sampSamp[i] * amp;
+      ctx.beginPath(); ctx.arc(x, y, Math.min(3.5, spacing * 0.18), 0, Math.PI * 2); ctx.fill();
+    }
+  } else {
+    // Dense: draw as a solid line over the gray
+    ctx.save();
+    ctx.strokeStyle = '#3d6fa0';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    for (let i = 0; i < nSamp; i++) {
+      const x = (i / (nSamp - 1)) * w;
+      const y = h / 2 - sampSamp[i] * amp;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Sample count label
+  ctx.fillStyle = '#bbb';
+  ctx.font = '10px system-ui';
+  ctx.textAlign = 'right';
+  ctx.fillText(`${nSamp} sample${nSamp !== 1 ? 's' : ''} · 30 ms`, w - 6, h - 6);
 }
 
-function drawFFT() {
-  const { ctx, w, h } = prep('fftCanvas');
+// ── Radix-2 Cooley-Tukey FFT (in-place, power-of-2 length) ───────
 
-  // Dark background
+function fft(re, im) {
+  const n = re.length;
+  // Bit-reversal permutation
+  for (let i = 0, j = 0; i < n - 1; i++) {
+    if (i < j) {
+      let t = re[i]; re[i] = re[j]; re[j] = t;
+          t = im[i]; im[i] = im[j]; im[j] = t;
+    }
+    let k = n >> 1;
+    while (k <= j) { j -= k; k >>= 1; }
+    j += k;
+  }
+  // Butterfly passes
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = -2 * Math.PI / len;
+    const wRe = Math.cos(ang), wIm = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let tRe = 1, tIm = 0;
+      const half = len >> 1;
+      for (let j = 0; j < half; j++) {
+        const uRe = re[i + j],      uIm = im[i + j];
+        const vRe = re[i+j+half] * tRe - im[i+j+half] * tIm;
+        const vIm = re[i+j+half] * tIm + im[i+j+half] * tRe;
+        re[i + j]      = uRe + vRe;  im[i + j]      = uIm + vIm;
+        re[i + j+half] = uRe - vRe;  im[i + j+half] = uIm - vIm;
+        const nRe = tRe * wRe - tIm * wIm;
+        tIm = tRe * wIm + tIm * wRe;
+        tRe = nRe;
+      }
+    }
+  }
+}
+
+// ── Draw: actual FFT spectrum of sampled signal (Section 2, bottom) ──
+
+function drawSamplingFFT() {
+  const { ctx, w, h } = prep('srFftCanvas');
   ctx.fillStyle = '#0b0d15';
   ctx.fillRect(0, 0, w, h);
 
-  const PAD   = { l: 46, r: 22, t: 22, b: 34 };
+  const PAD   = { l: 46, r: 22, t: 22, b: 32 };
   const pw    = w - PAD.l - PAD.r;
   const ph    = h - PAD.t - PAD.b;
   const sr    = getSR();
   const nyq   = sr / 2;
-  const maxF  = Math.max(nyq * 1.08, freq * numHarm * 1.22);
+
+  // Generate steady-state signal (no decay, no detuning) for clean FFT peaks
+  const FFT_N = 4096;
   const amps  = harmAmps();
-  const barW  = Math.max(6, Math.min(28, pw * (freq / maxF) * 0.48));
+  const re    = new Float64Array(FFT_N);
+  const im    = new Float64Array(FFT_N);
+  for (let i = 0; i < FFT_N; i++) {
+    const t = i / sr;
+    let s = 0;
+    for (let k = 0; k < numHarm; k++) {
+      s += amps[k] * Math.sin(2 * Math.PI * (k + 1) * freq * t + HARM_PHASE[k]);
+    }
+    // Hann window
+    re[i] = s * 0.5 * (1 - Math.cos(2 * Math.PI * i / (FFT_N - 1)));
+    im[i] = 0;
+  }
+  fft(re, im);
 
-  const fx = f => PAD.l + (f / maxF) * pw;
+  // Magnitudes for first half (0 to Nyquist)
+  const mags = new Float32Array(FFT_N / 2);
+  for (let i = 1; i < FFT_N / 2; i++) {
+    mags[i] = Math.sqrt(re[i] * re[i] + im[i] * im[i]);
+  }
+  let maxMag = 0;
+  for (let i = 1; i < FFT_N / 2; i++) maxMag = Math.max(maxMag, mags[i]);
+  if (maxMag === 0) maxMag = 1;
 
-  // Faint horizontal grid lines
+  const freqRes = sr / FFT_N;
+  const binToX  = i => PAD.l + (i * freqRes / nyq) * pw;
+  const fmtHz   = f => f >= 1000
+    ? (f / 1000).toFixed(f % 1000 === 0 ? 0 : 1) + 'k'
+    : String(Math.round(f));
+
+  // Faint grid
   ctx.strokeStyle = 'rgba(255,255,255,0.05)';
   ctx.lineWidth = 1;
-  for (let frac of [0.25, 0.5, 0.75, 1.0]) {
-    const y = PAD.t + ph - frac * ph;
+  for (const frac of [0.25, 0.5, 0.75]) {
+    const y = PAD.t + ph * (1 - frac);
     ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(PAD.l + pw, y); ctx.stroke();
   }
 
-  // Noise floor (deterministic pseudo-random — looks like real spectrum noise)
-  const rng = lcg(0xdeadbeef);
+  // Filled spectrum area
+  const grad = ctx.createLinearGradient(0, PAD.t, 0, PAD.t + ph);
+  grad.addColorStop(0,   'rgba(100,170,255,0.55)');
+  grad.addColorStop(0.6, 'rgba(60,120,200,0.30)');
+  grad.addColorStop(1,   'rgba(30,80,160,0.10)');
   ctx.beginPath();
-  ctx.strokeStyle = 'rgba(80,130,190,0.35)';
-  ctx.lineWidth = 1;
-  const noiseBase = PAD.t + ph;
-  for (let px = 0; px <= pw; px++) {
-    const r  = rng();
-    const r2 = rng();
-    // Two-sample average for smoother but still noisy look
-    const ny = noiseBase - (r + r2) / 2 * 10;
-    px === 0 ? ctx.moveTo(PAD.l + px, ny) : ctx.lineTo(PAD.l + px, ny);
+  ctx.moveTo(binToX(1), PAD.t + ph);
+  for (let i = 1; i < FFT_N / 2; i++) {
+    const x = binToX(i);
+    if (x > PAD.l + pw) break;
+    ctx.lineTo(x, PAD.t + ph - (mags[i] / maxMag) * ph * 0.88);
+  }
+  ctx.lineTo(Math.min(binToX(FFT_N / 2 - 1), PAD.l + pw), PAD.t + ph);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Spectrum line
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(120,185,255,0.85)';
+  ctx.lineWidth = 1.5;
+  let started = false;
+  for (let i = 1; i < FFT_N / 2; i++) {
+    const x = binToX(i);
+    if (x > PAD.l + pw) break;
+    const y = PAD.t + ph - (mags[i] / maxMag) * ph * 0.88;
+    started ? ctx.lineTo(x, y) : (ctx.moveTo(x, y), started = true);
   }
   ctx.stroke();
+
+  // Expected harmonic marker lines (only those within Nyquist)
+  for (let k = 1; k <= numHarm; k++) {
+    const f = k * freq;
+    if (f >= nyq) break;
+    const x = PAD.l + (f / nyq) * pw;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(100,220,120,0.30)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(x, PAD.t); ctx.lineTo(x, PAD.t + ph); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(100,220,120,0.65)';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(fmtHz(f), x, PAD.t + ph + 14);
+    ctx.restore();
+  }
 
   // Axes
   ctx.strokeStyle = 'rgba(255,255,255,0.18)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(PAD.l, PAD.t);
-  ctx.lineTo(PAD.l, PAD.t + ph);
-  ctx.lineTo(PAD.l + pw, PAD.t + ph);
-  ctx.stroke();
-
-  // Nyquist dashed line
-  const nx = fx(nyq);
-  ctx.save();
-  ctx.strokeStyle = '#e07840';
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([5, 4]);
-  ctx.beginPath();
-  ctx.moveTo(nx, PAD.t);
-  ctx.lineTo(nx, PAD.t + ph);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle = '#e07840';
-  ctx.font = '9px system-ui';
-  ctx.textAlign = nx + 50 < PAD.l + pw ? 'left' : 'right';
-  ctx.fillText('Nyquist', nx + (nx + 50 < PAD.l + pw ? 4 : -4), PAD.t + 10);
-  ctx.restore();
-
-  // Harmonic bars + frequency labels
-  const fmtHz = f => f >= 1000
-    ? (f / 1000).toFixed(f % 1000 === 0 ? 0 : 1) + 'k'
-    : String(f);
-
-  for (let k = 1; k <= numHarm; k++) {
-    const f       = k * freq;
-    const x       = fx(f);
-    const relAmp  = HARM_BASE[k - 1] / HARM_BASE[0];  // relative to fundamental
-    const barH    = relAmp * ph * 0.84;
-    const aliased = f > nyq;
-
-    // Bar with vertical gradient
-    const grad = ctx.createLinearGradient(0, PAD.t + ph - barH, 0, PAD.t + ph);
-    if (aliased) {
-      grad.addColorStop(0, 'rgba(220, 90, 40, 0.90)');
-      grad.addColorStop(1, 'rgba(220, 90, 40, 0.40)');
-    } else {
-      grad.addColorStop(0, 'rgba(100, 170, 255, 0.95)');
-      grad.addColorStop(1, 'rgba(60,  120, 200, 0.40)');
-    }
-    ctx.fillStyle = grad;
-    ctx.fillRect(x - barW / 2, PAD.t + ph - barH, barW, barH);
-
-    // Frequency label below axis
-    ctx.fillStyle = aliased ? '#e07840' : 'rgba(255,255,255,0.50)';
-    ctx.font = '9px system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillText(fmtHz(f), x, PAD.t + ph + 14);
-  }
+  ctx.moveTo(PAD.l, PAD.t); ctx.lineTo(PAD.l, PAD.t + ph);
+  ctx.lineTo(PAD.l + pw, PAD.t + ph); ctx.stroke();
 
   // Axis labels
-  ctx.fillStyle = 'rgba(255,255,255,0.30)';
+  ctx.fillStyle = 'rgba(255,255,255,0.28)';
   ctx.font = '9.5px system-ui';
   ctx.textAlign = 'left';
   ctx.fillText('0', PAD.l + 2, PAD.t + ph + 14);
   ctx.textAlign = 'right';
-  ctx.fillText(fmtHz(Math.round(maxF)) + ' Hz', w - PAD.r, h - 4);
+  ctx.fillText(fmtHz(nyq) + ' Hz  (Nyquist)', w - PAD.r, h - 4);
 
   // Y-axis label
   ctx.save();
@@ -588,7 +696,7 @@ function drawFFT() {
   ctx.fillStyle = 'rgba(255,255,255,0.22)';
   ctx.font = '9px system-ui';
   ctx.textAlign = 'center';
-  ctx.fillText('Amplitude', 0, 0);
+  ctx.fillText('Magnitude', 0, 0);
   ctx.restore();
 }
 
@@ -600,7 +708,7 @@ function drawQuantWaveform() {
   centerRule(ctx, w, h);
 
   const bits     = getBits();
-  const DISP_SR  = 44100;
+  const DISP_SR  = getSR();
   const DISP_DUR = 0.030;
   const original = generateSamples(DISP_SR, DISP_DUR);
   const quant    = quantize(original, bits);
@@ -790,7 +898,8 @@ function playSignal(sr, bits) {
 
 function redrawAll() {
   drawWaveform();
-  drawFFT();
+  drawSampledWaveform();
+  drawSamplingFFT();
   drawQuantWaveform();
   updateNyquist();
   updateNoiseReadout();
