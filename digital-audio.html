@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Exploring Digital Audio — Physics of Sound</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #ece8e2;
+      color: #1e1e1e;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px 80px;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #111;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      font-size: 0.88rem;
+      color: #777;
+      margin-bottom: 32px;
+      text-align: center;
+      max-width: 620px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: #fff;
+      border: 1px solid #ddd8cf;
+      border-radius: 12px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+      padding: 24px 26px 22px;
+      max-width: 920px;
+      width: 100%;
+      margin-bottom: 18px;
+    }
+    .card-title {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.10em;
+      color: #aaa;
+      margin-bottom: 20px;
+    }
+
+    /* ── Controls ── */
+    .ctrl-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px 32px;
+      align-items: flex-end;
+      margin-bottom: 18px;
+    }
+    .ctrl {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .ctrl label {
+      font-size: 0.74rem;
+      color: #888;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .cv { font-weight: 700; color: #1e1e1e; }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 3px;
+      border-radius: 3px;
+      background: #ccc6bc;
+      cursor: pointer;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 15px; height: 15px;
+      border-radius: 50%;
+      background: #3d6fa0;
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 1.5px #3d6fa0;
+      cursor: pointer;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 15px; height: 15px;
+      border-radius: 50%;
+      background: #3d6fa0;
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 1.5px #3d6fa0;
+      cursor: pointer;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      border: none;
+      border-radius: 7px;
+      padding: 8px 18px;
+      font-size: 0.81rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.12s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn:active { transform: scale(0.96); }
+    .btn-blue { background: #3d6fa0; color: #fff; }
+    .btn-blue:hover { background: #2d5a88; }
+    .btn-teal { background: #2e8b6e; color: #fff; }
+    .btn-teal:hover { background: #1f7058; }
+
+    /* ── Canvases ── */
+    canvas {
+      display: block;
+      width: 100%;
+      border-radius: 6px;
+      background: #faf8f5;
+      border: 1px solid #e5e0d8;
+    }
+
+    /* ── Snap slider ── */
+    .snap-wrap { margin-bottom: 20px; }
+    .snap-track { margin-bottom: 8px; }
+    .snap-track input[type="range"] { width: 100%; }
+    .snap-labels {
+      display: flex;
+      justify-content: space-between;
+    }
+    .snap-lbl {
+      text-align: center;
+      flex: 1;
+      line-height: 1.4;
+      transition: color 0.15s;
+    }
+    .snap-lbl .snm {
+      display: block;
+      font-size: 0.71rem;
+      font-weight: 600;
+      color: #666;
+    }
+    .snap-lbl .snb {
+      display: block;
+      font-size: 0.62rem;
+      color: #bbb;
+    }
+    .snap-lbl.active .snm { color: #3d6fa0; }
+    .snap-lbl.active .snb { color: #7aaacf; }
+
+    /* ── Nyquist callout ── */
+    .nyq-box {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.79rem;
+      line-height: 1.6;
+      margin-bottom: 16px;
+      border: 1px solid #b5d0ec;
+      background: #eef5fc;
+      color: #2a4a70;
+      transition: background 0.25s, border-color 0.25s, color 0.25s;
+    }
+    .nyq-box.warn   { background: #fff4e6; border-color: #eeaa60; color: #7a3800; }
+    .nyq-box.danger { background: #fff0ec; border-color: #d05030; color: #6a1000; }
+
+    /* ── Play row ── */
+    .play-row {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .play-hint { font-size: 0.73rem; color: #bbb; }
+
+    /* ── Noise readout ── */
+    .noise-box {
+      margin-top: 12px;
+      padding: 9px 13px;
+      background: #f4f1ec;
+      border-radius: 7px;
+      font-size: 0.78rem;
+      color: #666;
+    }
+
+    /* ── File size section ── */
+    .file-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 24px;
+      align-items: flex-end;
+      margin-bottom: 16px;
+    }
+    .locked-val {
+      font-size: 0.79rem;
+      color: #666;
+      background: #f2ede8;
+      border: 1px solid #ddd8cf;
+      border-radius: 5px;
+      padding: 5px 10px;
+      white-space: nowrap;
+    }
+    input[type="number"] {
+      width: 72px;
+      border: 1px solid #ccc5bb;
+      border-radius: 5px;
+      padding: 5px 8px;
+      font-size: 0.81rem;
+      background: #faf8f5;
+      color: #1e1e1e;
+      outline: none;
+    }
+    input[type="number"]:focus { border-color: #3d6fa0; }
+    .file-result { font-size: 0.85rem; color: #333; line-height: 2; }
+    .file-result strong { font-weight: 700; color: #111; }
+    .file-secondary { font-size: 0.78rem; color: #aaa; }
+  </style>
+</head>
+<body>
+
+<h1>Exploring Digital Audio</h1>
+<p class="subtitle">Adjust the controls to hear and see how sampling rate and bit depth affect a digital audio signal.</p>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- 1. The Signal                                                   -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <div class="card-title">1 &mdash; The Signal</div>
+  <div class="ctrl-row">
+    <div class="ctrl">
+      <label>Frequency: <span class="cv" id="freqVal">400</span> Hz</label>
+      <input type="range" id="freqSlider" min="100" max="1000" step="10" value="400" style="width:140px">
+    </div>
+    <div class="ctrl">
+      <label>Harmonics: <span class="cv" id="harmVal">6</span></label>
+      <input type="range" id="harmSlider" min="1" max="8" step="1" value="6" style="width:110px">
+    </div>
+    <div class="ctrl">
+      <label>Decay: Short &rarr; Long</label>
+      <input type="range" id="decaySlider" min="0" max="8" step="1" value="4" style="width:130px">
+    </div>
+    <button class="btn btn-blue" id="btnPlay1" style="align-self:flex-end;">&#9654; Play</button>
+  </div>
+  <canvas id="waveCanvas" height="130"></canvas>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- 2. Sampling Rate                                                -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <div class="card-title">2 &mdash; Sampling Rate</div>
+  <div class="snap-wrap">
+    <div class="snap-track">
+      <input type="range" id="srSlider" min="0" max="5" step="1" value="5">
+    </div>
+    <div class="snap-labels" id="srLabels"></div>
+  </div>
+  <div class="nyq-box" id="nyqBox">&nbsp;</div>
+  <div class="play-row">
+    <button class="btn btn-teal" id="btnPlaySR">&#9654; Play at this sample rate</button>
+    <span class="play-hint">Lower the rate, then compare with the Play button above to hear aliasing</span>
+  </div>
+  <canvas id="fftCanvas" height="160"></canvas>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- 3. Bit Depth                                                    -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <div class="card-title">3 &mdash; Bit Depth</div>
+  <div class="snap-wrap">
+    <div class="snap-track">
+      <input type="range" id="bdSlider" min="0" max="5" step="1" value="5">
+    </div>
+    <div class="snap-labels" id="bdLabels"></div>
+  </div>
+  <div class="play-row">
+    <button class="btn btn-teal" id="btnPlayBD">&#9654; Play at this bit depth</button>
+    <span class="play-hint">Gray = original &nbsp;&middot;&nbsp; Blue = quantized (staircase)</span>
+  </div>
+  <canvas id="quantCanvas" height="190"></canvas>
+  <div class="noise-box" id="noiseBox">&mdash;</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- 4. File Size Calculator                                         -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <div class="card-title">4 &mdash; File Size Calculator</div>
+  <div class="file-grid">
+    <div class="ctrl">
+      <label>Duration (seconds)</label>
+      <input type="number" id="durInput" min="1" max="7200" value="180">
+    </div>
+    <div class="ctrl">
+      <label>Sample rate</label>
+      <span class="locked-val" id="srLocked">44,100 Hz</span>
+    </div>
+    <div class="ctrl">
+      <label>Bit depth</label>
+      <span class="locked-val" id="bdLocked">16 bits</span>
+    </div>
+    <div class="ctrl">
+      <label>Channels</label>
+      <span class="locked-val">Stereo (2)</span>
+    </div>
+  </div>
+  <div class="file-result" id="fileResult">&mdash;</div>
+</div>
+
+<script>
+(function () {
+'use strict';
+
+// ── Snap-point tables ─────────────────────────────────────────────
+
+const SR_PTS = [
+  { rate:  1000, label:  '1,000 Hz', sub: 'not really used'   },
+  { rate:  4000, label:  '4,000 Hz', sub: 'low-quality voice' },
+  { rate:  8000, label:  '8,000 Hz', sub: 'telephone'         },
+  { rate: 11025, label: '11,025 Hz', sub: 'AM radio'          },
+  { rate: 22050, label: '22,050 Hz', sub: 'FM radio'          },
+  { rate: 44100, label: '44,100 Hz', sub: 'CD quality'        },
+];
+
+const BD_PTS = [
+  { bits:  2, label:  '2 bits', sub:          '4 levels' },
+  { bits:  3, label:  '3 bits', sub:          '8 levels' },
+  { bits:  4, label:  '4 bits', sub:         '16 levels' },
+  { bits:  6, label:  '6 bits', sub:         '64 levels' },
+  { bits:  8, label:  '8 bits', sub:        '256 levels' },
+  { bits: 16, label: '16 bits', sub:     '65,536 levels' },
+];
+
+// Decay time constants τ (seconds) indexed by slider position 0–8
+const DECAY_TAU = [0.04, 0.08, 0.15, 0.28, 0.50, 0.85, 1.30, 1.90, 3.00];
+
+// ── State ─────────────────────────────────────────────────────────
+
+let freq      = 400;
+let numHarm   = 6;
+let decayIdx  = 4;   // index into DECAY_TAU
+let srIdx     = 5;   // index into SR_PTS
+let bdIdx     = 5;   // index into BD_PTS
+
+const getSR   = () => SR_PTS[srIdx].rate;
+const getBits = () => BD_PTS[bdIdx].bits;
+const getTau  = () => DECAY_TAU[decayIdx];
+
+// ── Signal math ───────────────────────────────────────────────────
+
+function harmAmps() {
+  // Amplitude of k-th harmonic: 1/k, normalised so sum = 1
+  const raw = [];
+  let s = 0;
+  for (let k = 1; k <= numHarm; k++) { const a = 1 / k; raw.push(a); s += a; }
+  return raw.map(a => a / s);
+}
+
+function generateSamples(sampleRate, durationSec) {
+  const n    = Math.floor(sampleRate * durationSec);
+  const buf  = new Float32Array(n);
+  const amps = harmAmps();
+  const tau  = getTau();
+  for (let i = 0; i < n; i++) {
+    const t   = i / sampleRate;
+    const env = Math.exp(-t / tau);
+    let   s   = 0;
+    for (let k = 0; k < numHarm; k++) {
+      s += amps[k] * Math.sin(2 * Math.PI * (k + 1) * freq * t);
+    }
+    buf[i] = s * 0.75 * env;
+  }
+  return buf;
+}
+
+function quantize(samples, bits) {
+  const halfLvl = Math.pow(2, bits) / 2;
+  const out     = new Float32Array(samples.length);
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-0.9999, Math.min(0.9999, samples[i]));
+    out[i]  = Math.round(s * (halfLvl - 1)) / (halfLvl - 1);
+  }
+  return out;
+}
+
+// ── Canvas helpers ────────────────────────────────────────────────
+
+function prep(id) {
+  const cvs = document.getElementById(id);
+  const dpr = window.devicePixelRatio || 1;
+  const w   = cvs.clientWidth  || 868;
+  const h   = cvs.clientHeight || parseInt(cvs.getAttribute('height'), 10) || 150;
+  cvs.width  = Math.round(w * dpr);
+  cvs.height = Math.round(h * dpr);
+  const ctx  = cvs.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, w, h };
+}
+
+function bg(ctx, w, h) {
+  ctx.fillStyle = '#faf8f5';
+  ctx.fillRect(0, 0, w, h);
+}
+
+function centerRule(ctx, w, h) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,0,0,0.07)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
+  ctx.restore();
+}
+
+// ── Draw: source waveform ─────────────────────────────────────────
+
+function drawWaveform() {
+  const { ctx, w, h } = prep('waveCanvas');
+  bg(ctx, w, h);
+  centerRule(ctx, w, h);
+
+  const DISP_SR  = 44100;
+  const DISP_DUR = 0.030;   // 30 ms
+  const samples  = generateSamples(DISP_SR, DISP_DUR);
+  const amp      = h / 2 - 8;
+
+  ctx.beginPath();
+  ctx.strokeStyle = '#3d6fa0';
+  ctx.lineWidth = 1.8;
+  for (let i = 0; i < samples.length; i++) {
+    const x = (i / (samples.length - 1)) * w;
+    const y = h / 2 - samples[i] * amp;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  ctx.fillStyle = '#ccc';
+  ctx.font = '10px system-ui';
+  ctx.textAlign = 'right';
+  ctx.fillText('30 ms', w - 6, h - 6);
+}
+
+// ── Draw: FFT / spectrum (Section 2) ─────────────────────────────
+
+function drawFFT() {
+  const { ctx, w, h } = prep('fftCanvas');
+  bg(ctx, w, h);
+
+  const PAD   = { l: 44, r: 20, t: 22, b: 32 };
+  const pw    = w - PAD.l - PAD.r;
+  const ph    = h - PAD.t - PAD.b;
+  const sr    = getSR();
+  const nyq   = sr / 2;
+  const maxF  = Math.max(nyq * 1.08, freq * numHarm * 1.22);
+  const amps  = harmAmps();
+  const barW  = Math.max(5, Math.min(26, pw * (freq / maxF) * 0.45));
+
+  // Axes
+  ctx.strokeStyle = '#ccc';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(PAD.l, PAD.t);
+  ctx.lineTo(PAD.l, PAD.t + ph);
+  ctx.lineTo(PAD.l + pw, PAD.t + ph);
+  ctx.stroke();
+
+  const fx = f => PAD.l + (f / maxF) * pw;
+
+  // Nyquist dashed line
+  const nx = fx(nyq);
+  ctx.save();
+  ctx.strokeStyle = '#cc5a2a';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.moveTo(nx, PAD.t);
+  ctx.lineTo(nx, PAD.t + ph);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#cc5a2a';
+  ctx.font = '9px system-ui';
+  ctx.textAlign = nx + 46 < PAD.l + pw ? 'left' : 'right';
+  ctx.fillText('Nyquist', nx + (nx + 46 < PAD.l + pw ? 4 : -4), PAD.t + 10);
+  ctx.restore();
+
+  // Harmonic bars
+  for (let k = 1; k <= numHarm; k++) {
+    const f      = k * freq;
+    const x      = fx(f);
+    const barH   = amps[k - 1] / amps[0] * ph * 0.86;
+    const aliased = f > nyq;
+
+    ctx.globalAlpha = aliased ? 0.50 : 0.80;
+    ctx.fillStyle   = aliased ? '#d45a28' : '#3d6fa0';
+    ctx.fillRect(x - barW / 2, PAD.t + ph - barH, barW, barH);
+    ctx.globalAlpha = 1;
+
+    // Harmonic label below axis
+    ctx.fillStyle = aliased ? '#bb4820' : '#6690b8';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(k + 'f', x, PAD.t + ph + 14);
+  }
+
+  // Axis labels
+  ctx.fillStyle = '#bbb';
+  ctx.font = '9.5px system-ui';
+  ctx.textAlign = 'left';
+  ctx.fillText('0', PAD.l - 2, h - 5);
+  ctx.textAlign = 'right';
+  ctx.fillText(Math.round(maxF).toLocaleString() + ' Hz', w - PAD.r, h - 5);
+
+  // Y-axis label
+  ctx.save();
+  ctx.translate(12, PAD.t + ph / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillStyle = '#ccc';
+  ctx.font = '9px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('Amplitude', 0, 0);
+  ctx.restore();
+}
+
+// ── Draw: quantized waveform (Section 3) ─────────────────────────
+
+function drawQuantWaveform() {
+  const { ctx, w, h } = prep('quantCanvas');
+  bg(ctx, w, h);
+  centerRule(ctx, w, h);
+
+  const bits     = getBits();
+  const DISP_SR  = 44100;
+  const DISP_DUR = 0.030;
+  const original = generateSamples(DISP_SR, DISP_DUR);
+  const quant    = quantize(original, bits);
+  const amp      = h / 2 - 10;
+  const halfLvl  = Math.pow(2, bits) / 2;
+
+  // Quantization level guide lines
+  if (bits <= 6) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 0.75;
+    for (let q = -(halfLvl - 1); q <= halfLvl - 1; q++) {
+      const y = h / 2 - (q / (halfLvl - 1)) * amp;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Original (gray, smooth)
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  for (let i = 0; i < original.length; i++) {
+    const x = (i / (original.length - 1)) * w;
+    const y = h / 2 - original[i] * amp;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // Quantized (blue, staircase)
+  ctx.save();
+  ctx.strokeStyle = '#3d6fa0';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i < quant.length; i++) {
+    const x  = (i / (quant.length - 1)) * w;
+    const y  = h / 2 - quant[i] * amp;
+    if (i === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      // Step: hold previous value to x, then drop to new value
+      ctx.lineTo(x, h / 2 - quant[i - 1] * amp);
+      ctx.lineTo(x, y);
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // Time label
+  ctx.fillStyle = '#ccc';
+  ctx.font = '10px system-ui';
+  ctx.textAlign = 'right';
+  ctx.fillText('30 ms', w - 6, h - 6);
+}
+
+// ── Nyquist callout ───────────────────────────────────────────────
+
+function updateNyquist() {
+  const sr    = getSR();
+  const nyq   = sr / 2;
+  const box   = document.getElementById('nyqBox');
+  const lost  = [];
+  for (let k = 1; k <= numHarm; k++) {
+    if (k * freq > nyq) lost.push(k);
+  }
+
+  const nyqStr = nyq.toLocaleString() + ' Hz';
+  if (nyq < freq) {
+    box.className = 'nyq-box danger';
+    box.innerHTML =
+      `Nyquist limit: <strong>${nyqStr}</strong> &mdash; ` +
+      `even the fundamental (${freq}&thinsp;Hz) is above the Nyquist frequency. ` +
+      `Severe aliasing expected.`;
+  } else if (lost.length > 0) {
+    box.className = 'nyq-box warn';
+    box.innerHTML =
+      `Nyquist limit: <strong>${nyqStr}</strong> &mdash; ` +
+      `${lost.length} harmonic${lost.length > 1 ? 's' : ''} above this limit ` +
+      `will be lost or aliased (orange bars in the spectrum).`;
+  } else {
+    box.className = 'nyq-box';
+    box.innerHTML =
+      `Nyquist limit: <strong>${nyqStr}</strong> &mdash; ` +
+      `all ${numHarm} harmonic${numHarm > 1 ? 's' : ''} of ${freq}&thinsp;Hz ` +
+      `fall below this limit and will be preserved.`;
+  }
+}
+
+// ── Quantization noise ────────────────────────────────────────────
+
+function updateNoiseReadout() {
+  const bits   = getBits();
+  const snr    = (6.02 * bits + 1.76).toFixed(1);
+  const levels = Math.pow(2, bits).toLocaleString();
+  document.getElementById('noiseBox').textContent =
+    `Quantization noise: \u2248 ${snr} dB SNR  \u00B7  ${levels} amplitude levels  \u00B7  each additional bit adds \u22486 dB`;
+}
+
+// ── File size ─────────────────────────────────────────────────────
+
+function updateFileSize() {
+  const dur  = parseFloat(document.getElementById('durInput').value) || 0;
+  const sr   = getSR();
+  const bits = getBits();
+
+  document.getElementById('srLocked').textContent = sr.toLocaleString() + ' Hz';
+  document.getElementById('bdLocked').textContent = bits + ' bits';
+
+  const el = document.getElementById('fileResult');
+  if (dur <= 0) { el.innerHTML = '&mdash;'; return; }
+
+  const wavBytes = dur * sr * (bits / 8) * 2;  // stereo
+  const mp3Bytes = dur * 128_000 / 8;           // 128 kbps fixed
+  const ratio    = Math.round(wavBytes / mp3Bytes);
+
+  const fmt = b => b >= 1e6 ? (b / 1e6).toFixed(2) + ' MB'
+                             : (b / 1000).toFixed(0) + ' KB';
+
+  el.innerHTML =
+    `Uncompressed (WAV): <strong>${fmt(wavBytes)}</strong><br>` +
+    `<span class="file-secondary">` +
+    `MP3 estimate @ 128 kbps: ${fmt(mp3Bytes)} &nbsp;&ndash;&nbsp; ` +
+    `${ratio}&times; smaller than uncompressed` +
+    `</span>`;
+}
+
+// ── Snap labels ───────────────────────────────────────────────────
+
+function buildLabels(containerId, pts, activeIdx) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  pts.forEach((p, i) => {
+    const d = document.createElement('div');
+    d.className = 'snap-lbl' + (i === activeIdx ? ' active' : '');
+    d.innerHTML = `<span class="snm">${p.label}</span><span class="snb">${p.sub}</span>`;
+    el.appendChild(d);
+  });
+}
+
+// ── Audio ─────────────────────────────────────────────────────────
+
+let audioCtx = null;
+let playing  = [];
+
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function stopAll() {
+  for (const n of playing) { try { n.stop(0); } catch (_) {} }
+  playing = [];
+}
+
+function playBuffer(samples, sampleRate) {
+  ensureAudio();
+  stopAll();
+  const buf = audioCtx.createBuffer(1, samples.length, sampleRate);
+  buf.copyToChannel(samples, 0);
+  const src  = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const gain = audioCtx.createGain();
+  const now  = audioCtx.currentTime;
+  const dur  = samples.length / sampleRate;
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(0.75, now + 0.025);
+  gain.gain.setValueAtTime(0.75, now + Math.max(dur - 0.06, 0.025));
+  gain.gain.linearRampToValueAtTime(0, now + dur);
+  src.connect(gain);
+  gain.connect(audioCtx.destination);
+  src.start(now);
+  src.stop(now + dur + 0.05);
+  playing.push(src);
+}
+
+function playSignal(sr, bits) {
+  // Play 5 time-constants worth of signal (fully decayed)
+  const dur     = Math.min(3.5, Math.max(0.4, getTau() * 5));
+  let   samples = generateSamples(sr, dur);
+  if (bits < 16) samples = quantize(samples, bits);
+  playBuffer(samples, sr);
+}
+
+// ── Full redraw ───────────────────────────────────────────────────
+
+function redrawAll() {
+  drawWaveform();
+  drawFFT();
+  drawQuantWaveform();
+  updateNyquist();
+  updateNoiseReadout();
+  updateFileSize();
+  buildLabels('srLabels', SR_PTS, srIdx);
+  buildLabels('bdLabels', BD_PTS, bdIdx);
+}
+
+// ── Event listeners ───────────────────────────────────────────────
+
+document.getElementById('freqSlider').addEventListener('input', function () {
+  freq = parseInt(this.value, 10);
+  document.getElementById('freqVal').textContent = freq;
+  redrawAll();
+});
+
+document.getElementById('harmSlider').addEventListener('input', function () {
+  numHarm = parseInt(this.value, 10);
+  document.getElementById('harmVal').textContent = numHarm;
+  redrawAll();
+});
+
+document.getElementById('decaySlider').addEventListener('input', function () {
+  decayIdx = parseInt(this.value, 10);
+  redrawAll();
+});
+
+document.getElementById('srSlider').addEventListener('input', function () {
+  srIdx = parseInt(this.value, 10);
+  redrawAll();
+});
+
+document.getElementById('bdSlider').addEventListener('input', function () {
+  bdIdx = parseInt(this.value, 10);
+  redrawAll();
+});
+
+document.getElementById('durInput').addEventListener('input', updateFileSize);
+
+document.getElementById('btnPlay1' ).addEventListener('click', () => playSignal(44100, 16));
+document.getElementById('btnPlaySR').addEventListener('click', () => playSignal(getSR(), 16));
+document.getElementById('btnPlayBD').addEventListener('click', () => playSignal(44100, getBits()));
+
+// ── Init ──────────────────────────────────────────────────────────
+
+requestAnimationFrame(() => requestAnimationFrame(redrawAll));
+window.addEventListener('resize', redrawAll);
+
+})();
+</script>
+</body>
+</html>
